@@ -1,0 +1,5 @@
+name=Playtris
+author=Chase Miller
+description=Just a crappy Tetris clone
+bundleID=sh.miller.playtris
+imagePath=
