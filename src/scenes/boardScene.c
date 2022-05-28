@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <assert.h>
+#include <math.h>
 #include "pd_api.h"
 #include "titleScene.h"
 #include "asset.h"
@@ -17,6 +18,8 @@
 
 #define MATRIX_GRID_TOP_X(col) (MATRIX_START_X + (col * MATRIX_GRID_SIZE))
 #define MATRIX_GRID_LEFT_Y(row) (row * MATRIX_GRID_SIZE)
+
+#define MAX_DIFFICULTY 20
 
 static LCDBitmap* background = NULL;
 static LCDBitmap* blockChessboard = NULL;
@@ -77,10 +80,11 @@ typedef struct SceneState {
     // Counts the number of frames for the current status
     unsigned int statusFrames;
 
+    int initialDifficulty;
     int difficulty;
+    int completedLines;
 
-    float gravity;
-    unsigned int gravityCountdown;
+    unsigned int gravityFrames;
 
     // Holds the state of each cell in the matrix
     MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS];
@@ -231,6 +235,31 @@ static bool Z_ORIENTATIONS[4][3][3] = {
       { 1, 0, 0 } }  
 };
 
+// How many frames per row a piece drops from gravity
+static int DIFFICULTY_LEVELS[21] = {
+    53,
+    49,
+    45,
+    41,
+    37,
+    33,
+    28,
+    22,
+    17,
+    11,
+    10,
+    9,
+    8,
+    7,
+    6,
+    6,
+    5,
+    5,
+    4,
+    4,
+    3
+};
+
 // Function prototpes
 
 static void loadBitmaps(void);
@@ -247,6 +276,8 @@ static void drawMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
 static MatrixPiecePoints getPointsForPiece(Piece piece, int col, int row, int orientation);
 static void addPiecePointsToMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, bool playerPiece, const MatrixPiecePoints* points);
 static void removePiecePointsFromMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points);
+static int difficultyForLines(int initialDifficulty, int completedLines);
+static inline int gravityFramesForDifficulty(int difficulty);
 
 // Handle when scene becomes active
 static void initScene(Scene* scene) {
@@ -290,6 +321,8 @@ static void updateScene(Scene* scene) {
     }
 
     drawMatrix(state->matrix);
+
+    SYS->drawFPS(0, 0);
 }
 
 // Called on frame update when in the "Start" state status
@@ -312,6 +345,16 @@ static void updateSceneStart(SceneState* state) {
 
     MatrixPiecePoints playerPoints = getPointsForPiece(state->playerPiece, state->playerCol, state->playerRow, state->playerOrientation);
     addPiecePointsToMatrix(state->matrix, state->playerPiece, true, &playerPoints);
+
+    // Adjust difficulty every 10 lines
+    if (state->completedLines % 10 == 0) {
+        state->difficulty = difficultyForLines(state->initialDifficulty, state->completedLines);
+
+        SYS->logToConsole("Reached %d lines. Diffiulty now %d", state->completedLines, state->difficulty);
+    }
+
+    // Set gravity based on current difficulty
+    state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
     
     // After a piece is selected, switch to ARE state
     state->status = ARE;
@@ -332,9 +375,9 @@ static void updateSceneAre(SceneState* state) {
 static void updateSceneDropping(SceneState* state) {
     bool enforceGravity = false;
 
-    if (--state->gravityCountdown == 0) {
+    if (--state->gravityFrames == 0) {
         enforceGravity = true;
-        state->gravityCountdown = 20;
+        state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
     }
 
     PDButtons buttons;
@@ -384,6 +427,9 @@ static void updateSceneSettled(SceneState* state) {
 
         // All columns were filled for this row. Remove it by moving the row above it down
         if (completedCols == MATRIX_GRID_COLS) {
+            // Update completed lines tally
+            state->completedLines++;
+
             for (int targetRow = row; targetRow > 0; targetRow--) {
                 int sourceRow = targetRow - 1;
 
@@ -524,9 +570,10 @@ Scene* boardSceneCreate(int initialDifficulty) {
 
     // Initialize scene state to default values
     SceneState* state = SYS->realloc(NULL, sizeof(SceneState));
+    state->initialDifficulty = initialDifficulty;
     state->difficulty = initialDifficulty;
-    state->gravity = 1;
-    state->gravityCountdown = 20;
+    state->completedLines = 0;
+    state->gravityFrames = gravityFramesForDifficulty(initialDifficulty);
     state->status = Start;
     state->statusFrames = 0;
     state->playerPiece = None;
@@ -583,7 +630,7 @@ static void clearMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
         for (int col = 0; col < MATRIX_GRID_COLS; col++) {
            matrix[row][col].filled = false;
            matrix[row][col].player = false;
-           matrix[row][col].piece = 0;
+           matrix[row][col].piece = None;
         }
     }
 }
@@ -717,6 +764,27 @@ static void removePiecePointsFromMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATR
 
         matrix[point[1]][point[0]].filled = false;
         matrix[point[1]][point[0]].player = false;
-        matrix[point[1]][point[0]].piece = 0;
+        matrix[point[1]][point[0]].piece = None;
     }
+}
+
+// Calculates what the difficulty should be for the given number of completed lines
+static int difficultyForLines(int initialDifficulty, int completedLines) {
+    // Round lines to lower 10
+    completedLines = floor(completedLines / 10) * 10;
+
+    int difficulty = (completedLines / 10);
+
+    return difficulty > initialDifficulty
+        ? difficulty
+        : initialDifficulty;
+}
+
+// Get number of frames until gravity drops a piece one frame
+static inline int gravityFramesForDifficulty(int difficulty) {
+    if (difficulty < 0 || difficulty > MAX_DIFFICULTY) {
+        difficulty = MAX_DIFFICULTY;
+    }
+
+    return DIFFICULTY_LEVELS[difficulty];
 }

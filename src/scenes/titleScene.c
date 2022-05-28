@@ -28,7 +28,7 @@ static void updateScene(Scene* scene) {
 
     // Press A button to start the game
     if ((released & kButtonA) == kButtonA) {
-        gameChangeScene(boardSceneCreate(1));
+        gameChangeScene(boardSceneCreate(0));
     }
 }
 
