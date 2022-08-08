@@ -21,6 +21,11 @@
 
 #define MAX_DIFFICULTY 20
 
+#define DAS_CHARGE_DELAY 23
+#define DAS_REPEAT_DELAY 9
+
+#define SOFTDROP_GRAVITY 3
+
 static LCDBitmap* background = NULL;
 static LCDBitmap* blockChessboard = NULL;
 static LCDBitmap* blockEye = NULL;
@@ -67,12 +72,28 @@ typedef enum Status {
     Settled
 } Status;
 
+typedef struct Position {
+    int row;
+    int col;
+    int orientation;
+} Position;
+
 // Houses the 4 X/Y coordinates that make up a piece to be placed on the matrix
 // Returned by the getPointsForPiece function
 typedef struct MatrixPiecePoints {
     int points[4][2];
     int numPoints;
 } MatrixPiecePoints;
+
+// Houses the state of keys held for DAS
+typedef struct DasState {
+    // Current key being held (kButtonLeft, kButtonRight, zero)
+    int key;
+    // Whether the key has been pressed long enough to start repeating
+    bool charged;
+    // Current DAS frame count.
+    int frames;
+} DasState;
 
 // Contains all the current state for the scene
 typedef struct SceneState {
@@ -89,16 +110,19 @@ typedef struct SceneState {
     // Holds the state of each cell in the matrix
     MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS];
 
-    // Following four properties hold information about the active piece
-    // being controlled by the player
-    // Col/Row coords represent the top-left block within the orientation grid (can be negative if left column in orientation is empty blocks)
-
+    // Current player piece being controlled
     Piece playerPiece;
-    int playerOrientation;
-    int playerCol;
-    int playerRow;
+
+    // Current position of the player piece. X/Y coords are the top-left block of a piece and can be negative
+    Position playerPosition;
 
     Piece standbyPiece;
+
+    DasState das;
+
+    // Toggled when DOWN is pressed for a piece
+    // Used to prevent soft-drop from continuing to the next piece
+    bool softDropInitiated;
 } SceneState;
 
 // Each piece has 4 orientations which we designate as oritentation 0, 1, 2, and 3
@@ -268,14 +292,19 @@ static void updateSceneAre(SceneState* state);
 static void updateSceneDropping(SceneState* state);
 static void updateSceneSettled(SceneState* state);
 
-static bool attemptPlayerPieceMove(SceneState* state, PDButtons buttons, bool enforceGravity, int* finalCol, int* finalRow, int* finalOrientation);
-static bool shouldSettlePiece(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, int col, int row, int orientation);
+static void changeStatus(SceneState* state, Status status);
+static void updateDasCounts(DasState* state, PDButtons buttons);
+static int dasRepeatCheck(DasState* state);
+
+static bool shouldSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos);
 
 static void clearMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
-static void drawMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
+static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
 static MatrixPiecePoints getPointsForPiece(Piece piece, int col, int row, int orientation);
 static void addPiecePointsToMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, bool playerPiece, const MatrixPiecePoints* points);
 static void removePiecePointsFromMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points);
+static bool arePointsAvailable(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points);
+static Position determineDroppedPosition(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos);
 static int difficultyForLines(int initialDifficulty, int completedLines);
 static inline int gravityFramesForDifficulty(int difficulty);
 
@@ -301,6 +330,11 @@ static void initScene(Scene* scene) {
 // Called on every frame while scene is active
 static void updateScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
+    PDButtons buttons;
+
+    SYS->getButtonState(&buttons, NULL, NULL);
+
+    updateDasCounts(&(state->das), buttons);
 
     switch (state->status) {
         case Start:
@@ -308,7 +342,8 @@ static void updateScene(Scene* scene) {
             break;
 
         case ARE:
-            updateSceneAre(state);
+            updateSceneAre(state
+            );
             break;
 
         case Dropping:
@@ -339,11 +374,13 @@ static void updateSceneStart(SceneState* state) {
     state->standbyPiece = rand() % 7;
 
     // Place the player piece up top the matrix in the default orientation
-    state->playerRow = 0;
-    state->playerCol = 4;
-    state->playerOrientation = 0;
+    state->playerPosition.col = 4;
+    state->playerPosition.row = 0;
+    state->playerPosition.orientation = 0;
 
-    MatrixPiecePoints playerPoints = getPointsForPiece(state->playerPiece, state->playerCol, state->playerRow, state->playerOrientation);
+    Position playerPos = state->playerPosition;
+
+    MatrixPiecePoints playerPoints = getPointsForPiece(state->playerPiece, playerPos.col, playerPos.row, playerPos.orientation);
     addPiecePointsToMatrix(state->matrix, state->playerPiece, true, &playerPoints);
 
     // Adjust difficulty every 10 lines
@@ -355,18 +392,19 @@ static void updateSceneStart(SceneState* state) {
 
     // Set gravity based on current difficulty
     state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
+
+    // Reset soft drop
+    state->softDropInitiated = false;
     
     // After a piece is selected, switch to ARE state
-    state->status = ARE;
-    state->statusFrames = 0;
+    changeStatus(state, ARE);
 }
 
 // Called on frame update when in the "ARE" state status
 // Only runs for 2 frames and is just to allow the piece to float before giving player control
 static void updateSceneAre(SceneState* state) {
     if (++(state->statusFrames) == 2) {
-        state->status = Dropping;
-        state->statusFrames = 0;
+        changeStatus(state, Dropping);
     }
 }
 
@@ -375,36 +413,104 @@ static void updateSceneAre(SceneState* state) {
 static void updateSceneDropping(SceneState* state) {
     bool enforceGravity = false;
 
-    if (--state->gravityFrames == 0) {
-        enforceGravity = true;
-        state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
+    PDButtons currentKeys;
+    PDButtons pressedKeys;
+    
+    SYS->getButtonState(&currentKeys, &pressedKeys, NULL);
+
+    // If DOWN is newly pressed, force soft drop gravity
+    // Ignore if any other direction button is pressed too
+    if ((pressedKeys & 0xF) == kButtonDown) {
+        state->gravityFrames = SOFTDROP_GRAVITY;
+        state->softDropInitiated = true;
     }
 
-    PDButtons buttons;
-    int finalCol;
-    int finalRow;
-    int finalOrientation;
+    // Enforce gravity when counter expires and reset it
+    if (--state->gravityFrames == 0) {
+        enforceGravity = true;
 
-    SYS->getButtonState(NULL, &buttons, NULL);
+        // If DOWN is being held, override gravity for soft drop
+        // Ignore if any other direction button is pressed too
+        if (state->softDropInitiated && ((currentKeys & 0xF) == kButtonDown)) {
+            state->gravityFrames = SOFTDROP_GRAVITY;
+        } else {
+            state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
+        }
+    }
 
-    if (attemptPlayerPieceMove(state, buttons, enforceGravity, &finalCol, &finalRow, &finalOrientation)) {
-        // Remove the piece from its old position
-        MatrixPiecePoints currentPiecePoints = getPointsForPiece(state->playerPiece, state->playerCol, state->playerRow, state->playerOrientation);
-        removePiecePointsFromMatrix(state->matrix, &currentPiecePoints);
+    // Allow DAS to move piece left or right
+    int dasRepeatKey = dasRepeatCheck(&(state->das));
 
-        // Re-add piece to its new points and update state
-        MatrixPiecePoints movedPiecePoints = getPointsForPiece(state->playerPiece, finalCol, finalRow, finalOrientation);
-        addPiecePointsToMatrix(state->matrix, state->playerPiece, true, &movedPiecePoints);
+    if (enforceGravity || (pressedKeys > 0) || (dasRepeatKey > 0)) {
+        // The current player piece position
+        Position currentPos = state->playerPosition;
 
-        state->playerCol = finalCol;
-        state->playerRow = finalRow;
-        state->playerOrientation = finalOrientation;
+        // The position the player & gravity are trying to move the player piece to
+        Position attemptedPos = currentPos;
 
-        // If player piece now touches the top of another piece OR the bottom of the playfield
-        // then move to Settled status
-        if (shouldSettlePiece(state->matrix, state->playerPiece, state->playerCol, state->playerRow, state->playerOrientation)) {
-            state->status = Settled;
-            state->statusFrames = 0;
+        // The final position where the player piece will actually be moved to
+        Position finalPos = attemptedPos;
+
+        // If UP is pressed, immediately drop piece
+        if ((pressedKeys & kButtonUp) == kButtonUp) {
+            finalPos = determineDroppedPosition(state->matrix, state->playerPiece, finalPos);
+        } else {
+            // Adjust player movement attempt based on which button is pressed OR if DAS is in effect
+
+            if ((dasRepeatKey | (pressedKeys & kButtonRight)) == kButtonRight) {
+                attemptedPos.col++;
+            } else if ((dasRepeatKey | (pressedKeys & kButtonLeft)) == kButtonLeft) {
+                attemptedPos.col--;
+            }
+
+            // Pressing down with move the block down one row
+            // The piece will also be pushed down if gravity is taking effect
+            if (enforceGravity || ((pressedKeys & kButtonDown) == kButtonDown)) {
+                attemptedPos.row++;
+            }
+
+            // Pressing A buttons adjusts orientation right
+            if ((pressedKeys & kButtonA) == kButtonA) {
+                if (++attemptedPos.orientation > 3) {
+                    attemptedPos.orientation = 0;
+                }
+            }
+
+            // Pressing B buttons adjusts orientation left
+            if ((pressedKeys & kButtonB) == kButtonB) {
+                if (--attemptedPos.orientation < 0) {
+                    attemptedPos.orientation = 3;
+                }
+            }
+
+            MatrixPiecePoints pointsForAttempt = getPointsForPiece(state->playerPiece, attemptedPos.col, attemptedPos.row, attemptedPos.orientation);
+
+            // If any of the points for the attempted move are cells that are already filled, then the player can't move there.
+            bool canPlotPoints = arePointsAvailable(state->matrix, &pointsForAttempt);
+
+            // For a legal move, all 4 visible points of the piece must be plottable on the matrix and not already filled
+            if (pointsForAttempt.numPoints == 4 && canPlotPoints) {
+                finalPos = attemptedPos;
+            } else if (enforceGravity) {
+                // If the player couldn't move to a legal place but the piece needs to be moved by gravity, then just move it down a row
+                finalPos.row++;
+            }
+        }
+
+        // Update current player piece position if it has changed
+        if (currentPos.col != finalPos.col || currentPos.row != finalPos.row || currentPos.orientation != finalPos.orientation) {
+            MatrixPiecePoints currentPiecePoints = getPointsForPiece(state->playerPiece, state->playerPosition.col, state->playerPosition.row, state->playerPosition.orientation);
+            removePiecePointsFromMatrix(state->matrix, &currentPiecePoints);
+
+            // Re-add piece to its new points and update state
+            MatrixPiecePoints movedPiecePoints = getPointsForPiece(state->playerPiece, finalPos.col, finalPos.row, finalPos.orientation);
+            addPiecePointsToMatrix(state->matrix, state->playerPiece, true, &movedPiecePoints);
+
+            state->playerPosition = finalPos;
+
+            if (shouldSettlePiece(state->matrix, state->playerPiece, finalPos)) {
+                changeStatus(state, Settled);
+            }
         }
     }
 }
@@ -449,92 +555,13 @@ static void updateSceneSettled(SceneState* state) {
     }
 
     // Set state back to Start so the next piece is selected and put into play
-    state->status = Start;
-    state->statusFrames = 0;
-}
-
-// Attempts to move the active player piece during the Dropping status
-// Returns whether or not the piece did move
-static bool attemptPlayerPieceMove(SceneState* state, PDButtons buttons, bool enforceGravity, int* finalCol, int* finalRow, int* finalOrientation) {
-    // Return value. Indicates that the player piece was moved
-    bool moved = false;
-
-    // If any buttons are pressed and/or gravity is being enforced then we need to make adjustments to the player piece
-    // We can ignore if only UP is pressed since UP has no affect on the piece
-    if (enforceGravity || ((buttons > 0) && (buttons != kButtonUp))) {
-        int attemptedCol = state->playerCol;
-        int attemptedRow = state->playerRow;
-        int attemptedOrientation = state->playerOrientation;
-
-        *finalCol = state->playerCol;
-        *finalRow = state->playerRow;
-        *finalOrientation = state->playerOrientation;
-
-        // Adjust player movement attempt based on which button is pressed
-
-        if ((buttons & kButtonRight) == kButtonRight) {
-            attemptedCol++;
-        } else if ((buttons & kButtonLeft) == kButtonLeft) {
-            attemptedCol--;
-        }
-
-        // Pressing down with move the block down one row
-        // The piece will also be pushed down if gravity takes effect
-        if (enforceGravity || ((buttons & kButtonDown) == kButtonDown)) {
-            attemptedRow++;
-        }
-
-        // Pressing A buttons adjusts orientation right
-        if ((buttons & kButtonA) == kButtonA) {
-            if (++attemptedOrientation > 3) {
-                attemptedOrientation = 0;
-            }
-        }
-
-        // Pressing B buttons adjusts orientation left
-        if ((buttons & kButtonB) == kButtonB) {
-            if (--attemptedOrientation < 0) {
-                attemptedOrientation = 3;
-            }
-        }
-
-        MatrixPiecePoints pointsForAttempt = getPointsForPiece(state->playerPiece, attemptedCol, attemptedRow, attemptedOrientation);
-
-        // If any of the points for the attempted move are cells that are already filled, then the player can't move there.
-        bool pointsAreFree = true;
-
-        for (int i = 0; i < pointsForAttempt.numPoints; i++) {
-            const int* point = pointsForAttempt.points[i];
-            const int pointCol = point[0];
-            const int pointRow = point[1];
-
-            if (state->matrix[pointRow][pointCol].filled && !state->matrix[pointRow][pointCol].player) {
-                pointsAreFree = false;
-            }
-        }
-
-        // For a legal move, all 4 visible points of the piece must be plottable on the matrix and not already filled
-        if (pointsForAttempt.numPoints == 4 && pointsAreFree) {
-            *finalRow = attemptedRow;
-            *finalCol = attemptedCol;
-            *finalOrientation = attemptedOrientation;
-        } else if (enforceGravity) {
-            // If the player couldn't move to a legal place but the piece needs to be moved by gravity, then just move it down a row
-            *finalRow++;
-        }
-
-        if (*finalRow != state->playerRow || *finalCol != state->playerCol || *finalOrientation != state->playerOrientation) {     
-            moved = true;
-        }
-    }
-
-    return moved;
+    changeStatus(state, Start);
 }
 
 // Returns if the given piece sits on another piece or the floor and should be fixed in place
-static bool shouldSettlePiece(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, int col, int row, int orientation) {
+static bool shouldSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos) {
     bool shouldSettle = false;
-    MatrixPiecePoints points = getPointsForPiece(piece, col, row, orientation);
+    MatrixPiecePoints points = getPointsForPiece(piece, pos.col, pos.row, pos.orientation);
 
     for (int i = 0; i < points.numPoints; i++) {
         const int* point = points.points[i];
@@ -557,6 +584,57 @@ static bool shouldSettlePiece(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_CO
     return shouldSettle;
 }
 
+// Change current status and rest status frame counter
+static void changeStatus(SceneState* state, Status status) {
+    state->status = status;
+    state->statusFrames = 0;
+}
+
+// Called on each frame. Updates the DAS counters
+static void updateDasCounts(DasState* state, PDButtons buttons) {
+    // Track if/how long the right or left button is held for DAS
+    if ((buttons & (kButtonLeft | kButtonRight)) > 0) {
+        int pressedKey = (buttons & kButtonLeft) == kButtonLeft
+            ? kButtonLeft
+            : kButtonRight;
+
+        // Reset DAS count if different key pressed
+        // Else increment
+        if (pressedKey != state->key) {
+            state->key = pressedKey;
+            state->frames = 1;
+            state->charged = false;
+        } else {
+            state->frames++;
+
+            if (!state->charged && state->frames == DAS_CHARGE_DELAY) {
+                state->charged = true;
+                state->frames = 0;
+            }
+        }
+        
+    } else {
+        // Reset everything if left or right isn't currently pressed
+        state->key = 0;
+        state->frames = 0;
+        state->charged = false;
+    }
+}
+
+// Check the DAS state if a key can be repeated.
+// Resets frame count if a repeat is available
+static int dasRepeatCheck(DasState* state) {
+    if (state->charged) {
+        if (state->frames >= DAS_REPEAT_DELAY) {
+            state->frames = 0;
+
+            return state->key;
+        }
+    }
+
+    return 0;
+}
+
 // Called before scene is transitioned away
 static void destroyScene(Scene* scene) {
     // Dispose of scene
@@ -577,10 +655,14 @@ Scene* boardSceneCreate(int initialDifficulty) {
     state->status = Start;
     state->statusFrames = 0;
     state->playerPiece = None;
-    state->playerOrientation = 0;
-    state->playerCol = 0;
-    state->playerRow = 0;
+    state->playerPosition.col = 0;
+    state->playerPosition.row = 0;
+    state->playerPosition.orientation = 0;
     state->standbyPiece = None;
+    state->das.charged = false;
+    state->das.frames = 0;
+    state->das.key = 0;
+    state->softDropInitiated = false;
 
     clearMatrix(state->matrix);
 
@@ -636,7 +718,7 @@ static void clearMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
 }
 
 // Draws all cells in the playfield matrix to the screen
-static void drawMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
+static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
     for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
         for (int col = 0; col < MATRIX_GRID_COLS; col++) {
             int x = MATRIX_GRID_TOP_X(col);
@@ -768,10 +850,38 @@ static void removePiecePointsFromMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATR
     }
 }
 
+// Returns whether or not the given X/Y points are are not already filled in the matrix
+// Current player piece points are ignored
+static bool arePointsAvailable(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points) {
+    for (int i = 0; i < points->numPoints; i++) {
+        const int* point = points->points[i];
+        const int pointCol = point[0];
+        const int pointRow = point[1];
+
+        if (matrix[pointRow][pointCol].filled && !matrix[pointRow][pointCol].player) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Determine where a piece would sit if it dropped straight down
+static Position determineDroppedPosition(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos) {
+    for (int row = pos.row; row < MATRIX_GRID_ROWS; row++) {
+        pos.row = row;
+        if (shouldSettlePiece(matrix, piece, pos)) {
+            break;
+        }
+    }
+
+    return pos;
+}
+
 // Calculates what the difficulty should be for the given number of completed lines
 static int difficultyForLines(int initialDifficulty, int completedLines) {
     // Round lines to lower 10
-    completedLines = floor(completedLines / 10) * 10;
+    completedLines = (int)(floor(completedLines / 10) * 10);
 
     int difficulty = (completedLines / 10);
 
