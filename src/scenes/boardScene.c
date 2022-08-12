@@ -296,7 +296,7 @@ static void changeStatus(SceneState* state, Status status);
 static void updateDasCounts(DasState* state, PDButtons buttons);
 static int dasRepeatCheck(DasState* state);
 
-static bool shouldSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos);
+static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos);
 
 static void clearMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
 static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
@@ -451,9 +451,13 @@ static void updateSceneDropping(SceneState* state) {
         // The final position where the player piece will actually be moved to
         Position finalPos = attemptedPos;
 
-        // If UP is pressed, immediately drop piece
+        // A piece gets settled in place when it tries to fall into another piece or the floor
+        int shouldSettle = false;
+
+        // If UP is pressed, immediately drop piece and settle it
         if ((pressedKeys & kButtonUp) == kButtonUp) {
             finalPos = determineDroppedPosition(state->matrix, state->playerPiece, finalPos);
+            shouldSettle = true;
         } else {
             // Adjust player movement attempt based on which button is pressed OR if DAS is in effect
 
@@ -483,17 +487,23 @@ static void updateSceneDropping(SceneState* state) {
                 }
             }
 
-            MatrixPiecePoints pointsForAttempt = getPointsForPiece(state->playerPiece, attemptedPos.col, attemptedPos.row, attemptedPos.orientation);
+            // Intersecting another block (or the bottom of the playfield) while the piece is moving down will cause it to settle in its current place
+            if (attemptedPos.row > currentPos.row && canSettlePiece(state->matrix, state->playerPiece, currentPos)) {
+                shouldSettle = true;
+            } else {
+                // The piece is still in play and we must determine if the piece can move to where it's being asked to go
+                MatrixPiecePoints pointsForAttempt = getPointsForPiece(state->playerPiece, attemptedPos.col, attemptedPos.row, attemptedPos.orientation);
 
-            // If any of the points for the attempted move are cells that are already filled, then the player can't move there.
-            bool canPlotPoints = arePointsAvailable(state->matrix, &pointsForAttempt);
+                // If any of the points for the attempted move are cells that are already filled, then the player can't move there.
+                bool canPlotPoints = arePointsAvailable(state->matrix, &pointsForAttempt);
 
-            // For a legal move, all 4 visible points of the piece must be plottable on the matrix and not already filled
-            if (pointsForAttempt.numPoints == 4 && canPlotPoints) {
-                finalPos = attemptedPos;
-            } else if (enforceGravity) {
-                // If the player couldn't move to a legal place but the piece needs to be moved by gravity, then just move it down a row
-                finalPos.row++;
+                // For a legal move, all 4 visible points of the piece must be plottable on the matrix and not already filled
+                if (pointsForAttempt.numPoints == 4 && canPlotPoints) {
+                    finalPos = attemptedPos;
+                } else if (enforceGravity) {
+                    // If the player couldn't move to a legal place but the piece needs to be moved by gravity, then just move it down a row
+                    finalPos.row++;
+                }
             }
         }
 
@@ -507,10 +517,10 @@ static void updateSceneDropping(SceneState* state) {
             addPiecePointsToMatrix(state->matrix, state->playerPiece, true, &movedPiecePoints);
 
             state->playerPosition = finalPos;
+        }
 
-            if (shouldSettlePiece(state->matrix, state->playerPiece, finalPos)) {
-                changeStatus(state, Settled);
-            }
+        if (shouldSettle) {
+            changeStatus(state, Settled);
         }
     }
 }
@@ -558,8 +568,8 @@ static void updateSceneSettled(SceneState* state) {
     changeStatus(state, Start);
 }
 
-// Returns if the given piece sits on another piece or the floor and should be fixed in place
-static bool shouldSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos) {
+// Returns if the given piece sits on top another piece or the floor
+static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos) {
     bool shouldSettle = false;
     MatrixPiecePoints points = getPointsForPiece(piece, pos.col, pos.row, pos.orientation);
 
@@ -870,7 +880,7 @@ static bool arePointsAvailable(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_
 static Position determineDroppedPosition(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos) {
     for (int row = pos.row; row < MATRIX_GRID_ROWS; row++) {
         pos.row = row;
-        if (shouldSettlePiece(matrix, piece, pos)) {
+        if (canSettlePiece(matrix, piece, pos)) {
             break;
         }
     }
