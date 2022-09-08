@@ -301,7 +301,7 @@ static int DIFFICULTY_LEVELS[21] = {
 
 // Function prototpes
 
-static void reset();
+static void reset(SceneState* state);
 static void loadBitmaps(void);
 static void updateSceneStart(SceneState* state);
 static void updateSceneAre(SceneState* state);
@@ -344,8 +344,8 @@ static void initScene(Scene* scene) {
     drawMatrix(state->matrix);
 }
 
-static void reset() {
-    gameChangeScene(boardSceneCreate(0));
+static void reset(SceneState* state) {
+    gameChangeScene(boardSceneCreate(state->initialDifficulty));
 }
 
 // Called on every frame while scene is active
@@ -637,7 +637,7 @@ static void updateSceneGameOver(SceneState* state) {
         SYS->getButtonState(NULL, &keys, NULL);
 
         if ((keys & kButtonA) == kButtonA) {
-            reset();
+            reset(state);
         }
     }
 }
