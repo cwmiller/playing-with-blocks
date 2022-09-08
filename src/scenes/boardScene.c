@@ -3,6 +3,8 @@
 #include <math.h>
 #include "pd_api.h"
 #include "titleScene.h"
+#include "boardScene.h"
+#include "game.h"
 #include "asset.h"
 #include "global.h"
 
@@ -10,6 +12,7 @@
 #define PIECE_WIDTH 20
 
 #define MATRIX_WIDTH 100
+#define MATRIX_HEIGHT LCD_ROWS
 #define MATRIX_START_X (LCD_COLUMNS / 2) - (MATRIX_WIDTH / 2)
 
 #define MATRIX_GRID_COLS 10
@@ -26,7 +29,10 @@
 
 #define SOFTDROP_GRAVITY 3
 
+// Background
 static LCDBitmap* background = NULL;
+
+// Block pieces
 static LCDBitmap* blockChessboard = NULL;
 static LCDBitmap* blockEye = NULL;
 static LCDBitmap* blockKnot = NULL;
@@ -34,6 +40,12 @@ static LCDBitmap* blockTargetOpen = NULL;
 static LCDBitmap* blockTargetClosed = NULL;
 static LCDBitmap* blockTracks = NULL;
 static LCDBitmap* blockTracksReversed = NULL;
+
+// Gameover is an animation of 4 steps
+static LCDBitmap* gameOverOne = NULL;
+static LCDBitmap* gameOverTwo = NULL;
+static LCDBitmap* gameOverThree = NULL;
+static LCDBitmap* gameOverFour = NULL;
 
 // All piece types
 typedef enum Piece {
@@ -69,7 +81,10 @@ typedef enum Status {
     Dropping,
 
     // Piece has settled into a spot
-    Settled
+    Settled,
+
+    // Player has reached the top and the game must end
+    GameOver
 } Status;
 
 typedef struct Position {
@@ -286,11 +301,13 @@ static int DIFFICULTY_LEVELS[21] = {
 
 // Function prototpes
 
+static void reset();
 static void loadBitmaps(void);
 static void updateSceneStart(SceneState* state);
 static void updateSceneAre(SceneState* state);
 static void updateSceneDropping(SceneState* state);
 static void updateSceneSettled(SceneState* state);
+static void updateSceneGameOver(SceneState* state);
 
 static void changeStatus(SceneState* state, Status status);
 static void updateDasCounts(DasState* state, PDButtons buttons);
@@ -327,6 +344,10 @@ static void initScene(Scene* scene) {
     drawMatrix(state->matrix);
 }
 
+static void reset() {
+    gameChangeScene(boardSceneCreate(0));
+}
+
 // Called on every frame while scene is active
 static void updateScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
@@ -339,23 +360,28 @@ static void updateScene(Scene* scene) {
     switch (state->status) {
         case Start:
             updateSceneStart(state);
+            drawMatrix(state->matrix);
             break;
 
         case ARE:
-            updateSceneAre(state
-            );
+            updateSceneAre(state);
+            drawMatrix(state->matrix);
             break;
 
         case Dropping:
             updateSceneDropping(state);
+            drawMatrix(state->matrix);
             break;
 
         case Settled:
             updateSceneSettled(state);
+            drawMatrix(state->matrix);
+            break;
+
+        case GameOver:
+            updateSceneGameOver(state);
             break;
     }
-
-    drawMatrix(state->matrix);
 
     SYS->drawFPS(0, 0);
 }
@@ -381,23 +407,32 @@ static void updateSceneStart(SceneState* state) {
     Position playerPos = state->playerPosition;
 
     MatrixPiecePoints playerPoints = getPointsForPiece(state->playerPiece, playerPos.col, playerPos.row, playerPos.orientation);
+
+    // A game over occurs when the player piece's starting position overlaps a piece on the board
+    bool canPlotPoints = arePointsAvailable(state->matrix, &playerPoints);
+
+    // Draw the new player piece even if it overwrites an existing piece
     addPiecePointsToMatrix(state->matrix, state->playerPiece, true, &playerPoints);
 
-    // Adjust difficulty every 10 lines
-    if (state->completedLines % 10 == 0) {
-        state->difficulty = difficultyForLines(state->initialDifficulty, state->completedLines);
+    if (!canPlotPoints) {
+        changeStatus(state, GameOver);
+    } else {
+        // Adjust difficulty every 10 lines
+        if (state->completedLines % 10 == 0) {
+            state->difficulty = difficultyForLines(state->initialDifficulty, state->completedLines);
 
-        SYS->logToConsole("Reached %d lines. Diffiulty now %d", state->completedLines, state->difficulty);
+            SYS->logToConsole("Reached %d lines. Diffiulty now %d", state->completedLines, state->difficulty);
+        }
+
+        // Set gravity based on current difficulty
+        state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
+
+        // Reset soft drop
+        state->softDropInitiated = false;
+        
+        // After a piece is selected, switch to ARE state
+        changeStatus(state, ARE);
     }
-
-    // Set gravity based on current difficulty
-    state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
-
-    // Reset soft drop
-    state->softDropInitiated = false;
-    
-    // After a piece is selected, switch to ARE state
-    changeStatus(state, ARE);
 }
 
 // Called on frame update when in the "ARE" state status
@@ -568,6 +603,45 @@ static void updateSceneSettled(SceneState* state) {
     changeStatus(state, Start);
 }
 
+// Called on frame update when in the "GameOver" state
+static void updateSceneGameOver(SceneState* state) {
+    // Display 4 blocks that cover the playfield over a second
+    if (state->statusFrames < 60) {
+        if ((state->statusFrames % 15) == 0) {
+            LCDBitmap* step = NULL;
+
+            switch (state->statusFrames / 15) {
+                case 0: 
+                    step = gameOverOne;
+                    break;
+                case 1: 
+                    step = gameOverTwo;
+                    break;
+                case 2: 
+                    step = gameOverThree;
+                    break;
+                case 3: 
+                    step = gameOverFour;
+                    break;
+            }
+
+            if (step != NULL) {
+                GFX->drawBitmap(step, 0, 0, kBitmapUnflipped);
+            }
+        }
+
+        state->statusFrames++;
+    } else {
+        // Pressing the A button will reset the game
+        PDButtons keys;
+        SYS->getButtonState(NULL, &keys, NULL);
+
+        if ((keys & kButtonA) == kButtonA) {
+            reset();
+        }
+    }
+}
+
 // Returns if the given piece sits on top another piece or the floor
 static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos) {
     bool shouldSettle = false;
@@ -687,9 +761,12 @@ Scene* boardSceneCreate(int initialDifficulty) {
 
 // Preloads all bitmaps from image files
 static void loadBitmaps(void) {
+    // Background
     if (background == NULL) {
         background = assetLoadBitmap("images/background.png");
     }
+
+    // Block pieces
 
     if (blockChessboard == NULL) {
         blockChessboard = assetLoadBitmap("images/blocks/chessboard.png");
@@ -713,6 +790,24 @@ static void loadBitmaps(void) {
 
     if (blockTracksReversed == NULL) {
         blockTracksReversed = assetLoadBitmap("images/blocks/tracks-reversed.png");
+    }
+
+    // Gameover steps
+
+    if (gameOverOne == NULL) {
+        gameOverOne = assetLoadBitmap("images/game-over/1.png");
+    }
+
+    if (gameOverTwo == NULL) {
+        gameOverTwo = assetLoadBitmap("images/game-over/2.png");
+    }
+
+    if (gameOverThree == NULL) {
+        gameOverThree = assetLoadBitmap("images/game-over/3.png");
+    }
+
+    if (gameOverFour == NULL) {
+        gameOverFour = assetLoadBitmap("images/game-over/4.png");
     }
 }
 
