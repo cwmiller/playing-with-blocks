@@ -338,11 +338,11 @@ static int DIFFICULTY_LEVELS[21] = {
 
 static void reset(SceneState* state);
 static void loadAssets(void);
-static void updateSceneStart(SceneState* state);
-static void updateSceneAre(SceneState* state);
-static void updateSceneDropping(SceneState* state);
-static void updateSceneSettled(SceneState* state);
-static void updateSceneGameOver(SceneState* state);
+static bool updateSceneStart(SceneState* state);
+static bool updateSceneAre(SceneState* state);
+static bool updateSceneDropping(SceneState* state);
+static bool updateSceneSettled(SceneState* state);
+static bool updateSceneGameOver(SceneState* state);
 
 static void changeStatus(SceneState* state, Status status);
 static void updateDasCounts(DasState* state, PDButtons buttons);
@@ -391,7 +391,7 @@ static void reset(SceneState* state) {
 }
 
 // Called on every frame while scene is active
-static void updateScene(Scene* scene) {
+static bool updateScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
     PDButtons buttons;
 
@@ -399,38 +399,38 @@ static void updateScene(Scene* scene) {
 
     updateDasCounts(&(state->das), buttons);
 
+    bool screenUpdated = false;
+
     switch (state->status) {
         case Start:
-            updateSceneStart(state);
-            drawMatrix(state->matrix);
+            screenUpdated = updateSceneStart(state);
             break;
 
         case ARE:
-            updateSceneAre(state);
-            drawMatrix(state->matrix);
+            screenUpdated = updateSceneAre(state);
             break;
 
         case Dropping:
-            updateSceneDropping(state);
-            drawMatrix(state->matrix);
+            screenUpdated = updateSceneDropping(state);
             break;
 
         case Settled:
-            updateSceneSettled(state);
-            drawMatrix(state->matrix);
+            screenUpdated = updateSceneSettled(state);
             break;
 
         case GameOver:
-            updateSceneGameOver(state);
+            screenUpdated = updateSceneGameOver(state);
             break;
     }
 
     SYS->drawFPS(0, 0);
+
+    return screenUpdated;
 }
 
 // Called on frame update when in the "Start" state status
 // Only runs for 1 frame and sets the active player piece
-static void updateSceneStart(SceneState* state) {
+static bool updateSceneStart(SceneState* state) {
     // On the first time this is called both player and standby pieces need to be picked
     if (state->standbyPiece != None) {
         state->playerPiece = state->standbyPiece;
@@ -455,6 +455,8 @@ static void updateSceneStart(SceneState* state) {
 
     // Draw the new player piece even if it overwrites an existing piece
     addPiecePointsToMatrix(state->matrix, state->playerPiece, true, &playerPoints);
+
+    drawMatrix(state->matrix);
 
     if (!canPlotPoints) {
         changeStatus(state, GameOver);
@@ -491,20 +493,25 @@ static void updateSceneStart(SceneState* state) {
         // After a piece is selected, switch to ARE state
         changeStatus(state, ARE);
     }
+
+    return true;
 }
 
 // Called on frame update when in the "ARE" state status
 // Only runs for 2 frames and is just to allow the piece to float before giving player control
-static void updateSceneAre(SceneState* state) {
+static bool updateSceneAre(SceneState* state) {
     if (++(state->statusFrames) == 2) {
         changeStatus(state, Dropping);
     }
+
+    return false;
 }
 
 // Called on frame update when in the "Dropping" state status
 // In this state the piece drops from gravity and is controllable by the player
-static void updateSceneDropping(SceneState* state) {
+static bool updateSceneDropping(SceneState* state) {
     bool enforceGravity = false;
+    bool screenUpdated = false;
 
     PDButtons currentKeys;
     PDButtons pressedKeys;
@@ -610,18 +617,24 @@ static void updateSceneDropping(SceneState* state) {
             addPiecePointsToMatrix(state->matrix, state->playerPiece, true, &movedPiecePoints);
 
             state->playerPosition = finalPos;
+
+            screenUpdated = true;
+            drawMatrix(state->matrix);
         }
 
         if (shouldSettle) {
             changeStatus(state, Settled);
         }
     }
+
+    return screenUpdated;
 }
 
 // Called on frame update when in the "Settled" state status
 // This state only runs for one frame and checks for completed lines, scores, and removes completed lines
-static void updateSceneSettled(SceneState* state) {
+static bool updateSceneSettled(SceneState* state) {
     int completedLines = 0;
+    bool screenUpdated = false;
 
     // Check for any completed rows
     for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
@@ -639,7 +652,6 @@ static void updateSceneSettled(SceneState* state) {
         // All columns were filled for this row. Remove it by moving the row above it down
         if (completedCols == MATRIX_GRID_COLS) {
             // Update completed lines tally
-            //state->completedLines++;
             completedLines++;
 
             for (int targetRow = row; targetRow > 0; targetRow--) {
@@ -665,14 +677,21 @@ static void updateSceneSettled(SceneState* state) {
         state->score += SCORING[completedLines - 1] * (state->difficulty + 1);
 
         state->completedLines += completedLines;
+
+        drawMatrix(state->matrix);
+        screenUpdated = true;
     }
 
     // Set state back to Start so the next piece is selected and put into play
     changeStatus(state, Start);
+
+    return screenUpdated;
 }
 
 // Called on frame update when in the "GameOver" state
-static void updateSceneGameOver(SceneState* state) {
+static bool updateSceneGameOver(SceneState* state) {
+    bool screenUpdated = false;
+
     // Display 4 blocks that cover the playfield over a second
     if (state->statusFrames < 60) {
         if ((state->statusFrames % 15) == 0) {
@@ -695,6 +714,7 @@ static void updateSceneGameOver(SceneState* state) {
 
             if (step != NULL) {
                 GFX->drawBitmap(step, 0, 0, kBitmapUnflipped);
+                screenUpdated = true;
             }
         }
 
@@ -708,6 +728,8 @@ static void updateSceneGameOver(SceneState* state) {
             reset(state);
         }
     }
+
+    return screenUpdated;
 }
 
 // Returns if the given piece sits on top another piece or the floor

@@ -19,7 +19,7 @@ static void initScene(Scene* scene) {
     }
 }
 
-static void updateScene(Scene* scene) {
+static bool updateScene(Scene* scene) {
     (void*)scene;
 
     PDButtons released;
@@ -29,6 +29,10 @@ static void updateScene(Scene* scene) {
     // Press A button to start the game
     if ((released & kButtonA) == kButtonA) {
         gameChangeScene(boardSceneCreate(0));
+
+        return true;
+    } else {
+        return false;
     }
 }
 
