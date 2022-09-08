@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
 #include <math.h>
@@ -29,6 +30,26 @@
 
 #define SOFTDROP_GRAVITY 3
 
+#define NEXT_BOX_X 38
+#define NEXT_BOX_Y 25
+#define NEXT_BOX_WIDTH 69
+#define NEXT_BOX_HEIGHT 32
+
+#define LEVEL_BOX_X 38
+#define LEVEL_BOX_Y 93
+#define LEVEL_BOX_WIDTH 69
+#define LEVEL_BOX_HEIGHT 15
+
+#define LINES_BOX_X 293
+#define LINES_BOX_Y 93
+#define LINES_BOX_WIDTH 69
+#define LINES_BOX_HEIGHT 15
+
+#define SCORE_BOX_X 293
+#define SCORE_BOX_Y 25
+#define SCORE_BOX_WIDTH 69
+#define SCORE_BOX_HEIGHT 15
+
 // Background
 static LCDBitmap* background = NULL;
 
@@ -46,6 +67,9 @@ static LCDBitmap* gameOverOne = NULL;
 static LCDBitmap* gameOverTwo = NULL;
 static LCDBitmap* gameOverThree = NULL;
 static LCDBitmap* gameOverFour = NULL;
+
+// Public Pixel font used for all text
+LCDFont* publicPixel = NULL;
 
 // All piece types
 typedef enum Piece {
@@ -302,7 +326,7 @@ static int DIFFICULTY_LEVELS[21] = {
 // Function prototpes
 
 static void reset(SceneState* state);
-static void loadBitmaps(void);
+static void loadAssets(void);
 static void updateSceneStart(SceneState* state);
 static void updateSceneAre(SceneState* state);
 static void updateSceneDropping(SceneState* state);
@@ -317,6 +341,7 @@ static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID
 
 static void clearMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
 static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
+static blockBitmapForPiece(Piece piece, LCDBitmap** bitmap);
 static MatrixPiecePoints getPointsForPiece(Piece piece, int col, int row, int orientation);
 static void addPiecePointsToMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, bool playerPiece, const MatrixPiecePoints* points);
 static void removePiecePointsFromMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points);
@@ -325,6 +350,9 @@ static Position determineDroppedPosition(const MatrixCell matrix[MATRIX_GRID_ROW
 static int difficultyForLines(int initialDifficulty, int completedLines);
 static inline int gravityFramesForDifficulty(int difficulty);
 
+static void drawBoxText(const char* text, LCDFont* font, int x, int y, int width, int height);
+static void drawBoxPiece(Piece piece, int x, int y, int width, int height);
+
 // Handle when scene becomes active
 static void initScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
@@ -332,7 +360,10 @@ static void initScene(Scene* scene) {
     // Seed the random number generator
     srand(SYS->getCurrentTimeMilliseconds());
 
-    loadBitmaps();
+    loadAssets();
+
+    // Set Public Pixel font as default
+    GFX->setFont(publicPixel);
 
     // Clear screen 
     GFX->clear(kColorWhite);
@@ -423,6 +454,21 @@ static void updateSceneStart(SceneState* state) {
 
             SYS->logToConsole("Reached %d lines. Diffiulty now %d", state->completedLines, state->difficulty);
         }
+
+        // Update text boxes
+        char levelTxt[128];
+        char linesTxt[128];
+
+        sprintf_s(levelTxt, 128, "%d", state->difficulty);
+        sprintf_s(linesTxt, 128, "%d", state->completedLines);
+
+        //drawBoxText("TODO", publicPixel, NEXT_BOX_X, NEXT_BOX_Y, NEXT_BOX_WIDTH, NEXT_BOX_HEIGHT);
+        drawBoxText(levelTxt, publicPixel, LEVEL_BOX_X, LEVEL_BOX_Y, LEVEL_BOX_WIDTH, LEVEL_BOX_HEIGHT);
+        drawBoxText(linesTxt, publicPixel, LINES_BOX_X, LINES_BOX_Y, LINES_BOX_WIDTH, LINES_BOX_HEIGHT);
+        drawBoxText("TODO", publicPixel, SCORE_BOX_X, SCORE_BOX_Y, SCORE_BOX_WIDTH, SCORE_BOX_HEIGHT);
+
+        // Update piece displays in Next box
+        drawBoxPiece(state->standbyPiece, NEXT_BOX_X, NEXT_BOX_Y, NEXT_BOX_WIDTH, NEXT_BOX_HEIGHT);
 
         // Set gravity based on current difficulty
         state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
@@ -595,7 +641,6 @@ static void updateSceneSettled(SceneState* state) {
                 state->matrix[0][col].filled = false;
                 state->matrix[0][col].piece = None;
             }
-
         }
     }
 
@@ -760,7 +805,7 @@ Scene* boardSceneCreate(int initialDifficulty) {
 }
 
 // Preloads all bitmaps from image files
-static void loadBitmaps(void) {
+static void loadAssets(void) {
     // Background
     if (background == NULL) {
         background = assetLoadBitmap("images/background.png");
@@ -809,6 +854,11 @@ static void loadBitmaps(void) {
     if (gameOverFour == NULL) {
         gameOverFour = assetLoadBitmap("images/game-over/4.png");
     }
+
+    // Font
+    if (publicPixel == NULL) {
+        publicPixel = assetLoadFont("fonts/public-pixel/PublicPixel-8pt");
+    }
 }
 
 // Clear all cells in the playfield matrix
@@ -832,6 +882,9 @@ static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COL
             if (matrix[row][col].filled) {
                 LCDBitmap* block = NULL;
 
+                blockBitmapForPiece(matrix[row][col].piece, &block);
+
+                /*
                 switch (matrix[row][col].piece) {
                     case None:
                         break;
@@ -857,6 +910,7 @@ static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COL
                         block = blockTracksReversed;
                         break;
                 }
+                */
 
                 if (block != NULL) {
                     GFX->drawBitmap(block, x, y, kBitmapUnflipped);
@@ -865,6 +919,35 @@ static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COL
                 GFX->fillRect(x, y, MATRIX_GRID_SIZE, MATRIX_GRID_SIZE, kColorWhite);
             }
         }
+    }
+}
+
+// Get reference to bitmap for a block used by a piece
+static blockBitmapForPiece(Piece piece, LCDBitmap** bitmap) {
+    switch (piece) {
+        case None:
+            break;
+        case L:
+            *bitmap = blockTargetOpen;
+            break;
+        case O:
+            *bitmap = blockChessboard;
+            break;
+        case S:
+            *bitmap = blockEye;
+            break;
+        case Z:
+            *bitmap = blockTargetClosed;
+            break;
+        case I:
+            *bitmap = blockChessboard;
+            break;
+        case T:
+            *bitmap = blockTracks;
+            break;
+        case J:
+            *bitmap = blockTracksReversed;
+            break;
     }
 }
 
@@ -1002,4 +1085,70 @@ static inline int gravityFramesForDifficulty(int difficulty) {
     }
 
     return DIFFICULTY_LEVELS[difficulty];
+}
+
+// Draw a line of text within a bounded box.
+// Centers the text within the box width and height
+static void drawBoxText(const char* text, LCDFont* font, int x, int y, int width, int height) {
+    GFX->setFont(font);
+
+    // Determine the height and width of the rendered text so we can center it within the box
+    int textWidth = GFX->getTextWidth(font, text, strlen(text), kASCIIEncoding, 0);
+    int textHeight = GFX->getFontHeight(font);
+
+    int centeredX = x + (width / 2) - (textWidth / 2);
+    int centeredY = y + (height /2) - (textHeight /2);
+
+    // Clear the box
+    GFX->fillRect(x, y, width, height, kColorWhite);
+    
+    // Write the text
+    GFX->drawText(text, strlen(text), kASCIIEncoding, centeredX, centeredY);
+}
+
+// Draw a piece within a bounded box
+// Piece is centered within the box width and height
+static void drawBoxPiece(Piece piece, int x, int y, int width, int height) {
+    // Clear the box
+    GFX->fillRect(x, y, width, height, kColorWhite);
+
+    LCDBitmap *block = NULL;
+
+    blockBitmapForPiece(piece, &block);
+
+    if (block != NULL) {
+        MatrixPiecePoints piecePoints = getPointsForPiece(piece, 0, 0, 0);
+
+        // Find the max X and Y points to deteremine the width and height of the piece
+        int maxX = 0;
+        int maxY = 0;
+
+        for (int i = 0; i < piecePoints.numPoints; i++) {
+            const int* point = piecePoints.points[i];
+
+            if (point[0] > maxX) {
+                maxX = point[0];
+            }
+
+            if (point[1] > maxY) {
+                maxY = point[1];
+            }
+        }
+
+        int pieceWidth = (maxX + 1) * MATRIX_GRID_SIZE;
+        int pieceHeight = (maxY + 1) * MATRIX_GRID_SIZE;
+
+        // Using the dimensions and the box and the piece, find the center point so we can offset the image to be in the center
+        int offsetX = x + (width / 2) - (pieceWidth / 2);
+        int offsetY = y + (height / 2) - (pieceHeight / 2);
+
+        for (int i = 0; i < piecePoints.numPoints; i++) {
+            const int* point = piecePoints.points[i];
+
+            int blockX = offsetX + (MATRIX_GRID_SIZE * point[0]);
+            int blockY = offsetY + (MATRIX_GRID_SIZE * point[1]);
+
+            GFX->drawBitmap(block, blockX, blockY, kBitmapUnflipped);
+        }
+    }
 }

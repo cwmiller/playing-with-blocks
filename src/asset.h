@@ -4,5 +4,6 @@
 #include "pd_api.h"
 
 LCDBitmap* assetLoadBitmap(const char* path);
+LCDFont* assetLoadFont(const char* path);
 
 #endif

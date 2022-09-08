@@ -13,3 +13,16 @@ LCDBitmap* assetLoadBitmap(const char* path) {
 
     return bitmap;
 }
+
+LCDFont* assetLoadFont(const char* path) {
+    LCDFont* font = NULL;
+    const char* error = NULL;
+
+    font = GFX->loadFont(path, &error);
+
+    if (error != NULL) {
+        SYS->logToConsole("Error loading asset at path '%s': %s", path, error);
+    }
+
+    return font;
+}
