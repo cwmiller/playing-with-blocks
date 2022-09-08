@@ -25,10 +25,10 @@
 
 #define MAX_DIFFICULTY 20
 
-#define DAS_CHARGE_DELAY 23
-#define DAS_REPEAT_DELAY 9
+#define DAS_CHARGE_DELAY 19
+#define DAS_REPEAT_DELAY 7
 
-#define SOFTDROP_GRAVITY 3
+#define SOFTDROP_GRAVITY 2
 
 #define NEXT_BOX_X 38
 #define NEXT_BOX_Y 25
@@ -57,7 +57,6 @@ static int SCORING[4] = {
     300,
     1200
 };
-
 
 // Background
 static LCDBitmap* background = NULL;
@@ -311,27 +310,27 @@ static bool Z_ORIENTATIONS[4][3][3] = {
 
 // How many frames per row a piece drops from gravity
 static int DIFFICULTY_LEVELS[21] = {
-    53,
-    49,
-    45,
+    44,
     41,
     37,
-    33,
-    28,
-    22,
-    17,
-    11,
-    10,
+    34,
+    31,
+    27,
+    23,
+    18,
+    14,
     9,
     8,
     7,
-    6,
+    7,
     6,
     5,
     5,
     4,
     4,
-    3
+    3,
+    3,
+    2
 };
 
 // Function prototpes
