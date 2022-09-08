@@ -50,6 +50,15 @@
 #define SCORE_BOX_WIDTH 69
 #define SCORE_BOX_HEIGHT 15
 
+// Score is calculated based on the number of lines completed in one drop & the current difficulty
+static int SCORING[4] = {
+    40,
+    100,
+    300,
+    1200
+};
+
+
 // Background
 static LCDBitmap* background = NULL;
 
@@ -143,6 +152,8 @@ typedef struct SceneState {
     int initialDifficulty;
     int difficulty;
     int completedLines;
+
+    int score;
 
     unsigned int gravityFrames;
 
@@ -456,16 +467,17 @@ static void updateSceneStart(SceneState* state) {
         }
 
         // Update text boxes
+        char scoreTxt[128];
         char levelTxt[128];
         char linesTxt[128];
 
+        sprintf_s(scoreTxt, 128, "%d", state->score);
         sprintf_s(levelTxt, 128, "%d", state->difficulty);
         sprintf_s(linesTxt, 128, "%d", state->completedLines);
 
-        //drawBoxText("TODO", publicPixel, NEXT_BOX_X, NEXT_BOX_Y, NEXT_BOX_WIDTH, NEXT_BOX_HEIGHT);
+        drawBoxText(scoreTxt, publicPixel, SCORE_BOX_X, SCORE_BOX_Y, SCORE_BOX_WIDTH, SCORE_BOX_HEIGHT);
         drawBoxText(levelTxt, publicPixel, LEVEL_BOX_X, LEVEL_BOX_Y, LEVEL_BOX_WIDTH, LEVEL_BOX_HEIGHT);
         drawBoxText(linesTxt, publicPixel, LINES_BOX_X, LINES_BOX_Y, LINES_BOX_WIDTH, LINES_BOX_HEIGHT);
-        drawBoxText("TODO", publicPixel, SCORE_BOX_X, SCORE_BOX_Y, SCORE_BOX_WIDTH, SCORE_BOX_HEIGHT);
 
         // Update piece displays in Next box
         drawBoxPiece(state->standbyPiece, NEXT_BOX_X, NEXT_BOX_Y, NEXT_BOX_WIDTH, NEXT_BOX_HEIGHT);
@@ -609,6 +621,8 @@ static void updateSceneDropping(SceneState* state) {
 // Called on frame update when in the "Settled" state status
 // This state only runs for one frame and checks for completed lines, scores, and removes completed lines
 static void updateSceneSettled(SceneState* state) {
+    int completedLines = 0;
+
     // Check for any completed rows
     for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
         int completedCols = 0;
@@ -625,7 +639,8 @@ static void updateSceneSettled(SceneState* state) {
         // All columns were filled for this row. Remove it by moving the row above it down
         if (completedCols == MATRIX_GRID_COLS) {
             // Update completed lines tally
-            state->completedLines++;
+            //state->completedLines++;
+            completedLines++;
 
             for (int targetRow = row; targetRow > 0; targetRow--) {
                 int sourceRow = targetRow - 1;
@@ -642,6 +657,14 @@ static void updateSceneSettled(SceneState* state) {
                 state->matrix[0][col].piece = None;
             }
         }
+    }
+
+    // Score this drop
+    if (completedLines > 0) {
+        // Score is completedLinesScore * (difficulty + 1)
+        state->score += SCORING[completedLines - 1] * (state->difficulty + 1);
+
+        state->completedLines += completedLines;
     }
 
     // Set state back to Start so the next piece is selected and put into play
@@ -780,6 +803,7 @@ Scene* boardSceneCreate(int initialDifficulty) {
     state->initialDifficulty = initialDifficulty;
     state->difficulty = initialDifficulty;
     state->completedLines = 0;
+    state->score = 0;
     state->gravityFrames = gravityFramesForDifficulty(initialDifficulty);
     state->status = Start;
     state->statusFrames = 0;
@@ -883,34 +907,6 @@ static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COL
                 LCDBitmap* block = NULL;
 
                 blockBitmapForPiece(matrix[row][col].piece, &block);
-
-                /*
-                switch (matrix[row][col].piece) {
-                    case None:
-                        break;
-                    case L:
-                        block = blockTargetOpen;
-                        break;
-                    case O:
-                        block = blockChessboard;
-                        break;
-                    case S:
-                        block = blockEye;
-                        break;
-                    case Z:
-                        block = blockTargetClosed;
-                        break;
-                    case I:
-                        block = blockChessboard;
-                        break;
-                    case T:
-                        block = blockTracks;
-                        break;
-                    case J:
-                        block = blockTracksReversed;
-                        break;
-                }
-                */
 
                 if (block != NULL) {
                     GFX->drawBitmap(block, x, y, kBitmapUnflipped);
