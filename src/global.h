@@ -3,8 +3,8 @@
 
 #include "pd_api.h"
 
-// Use 60 FPS as our goal
-#define FPS 60
+// Use 50 FPS as our goal, which is the max the Playdate can do
+#define FPS 50
 
 // Global variable to expose Playdate API
 extern PlaydateAPI* pd;
