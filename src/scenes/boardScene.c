@@ -172,6 +172,9 @@ typedef struct SceneState {
     // Toggled when DOWN is pressed for a piece
     // Used to prevent soft-drop from continuing to the next piece
     bool softDropInitiated;
+    // Keeps track of the row the soft drop started being held
+    // Used for scoring
+    int softDropStartingRow;
 } SceneState;
 
 // Each piece has 4 orientations which we designate as oritentation 0, 1, 2, and 3
@@ -488,6 +491,7 @@ static bool updateSceneStart(SceneState* state) {
 
         // Reset soft drop
         state->softDropInitiated = false;
+        state->softDropStartingRow = 0;
         
         // After a piece is selected, switch to ARE state
         changeStatus(state, ARE);
@@ -521,7 +525,13 @@ static bool updateSceneDropping(SceneState* state) {
     // Ignore if any other direction button is pressed too
     if ((pressedKeys & 0xF) == kButtonDown) {
         state->gravityFrames = SOFTDROP_GRAVITY;
-        state->softDropInitiated = true;
+        
+        if (!state->softDropInitiated) {
+            state->softDropInitiated = true;
+            state->softDropStartingRow = state->playerPosition.row;
+
+            SYS->logToConsole("%d", state->softDropStartingRow);
+        }
     }
 
     // Enforce gravity when counter expires and reset it
@@ -534,6 +544,7 @@ static bool updateSceneDropping(SceneState* state) {
             state->gravityFrames = SOFTDROP_GRAVITY;
         } else {
             state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
+            state->softDropInitiated = false;
         }
     }
 
@@ -670,7 +681,13 @@ static bool updateSceneSettled(SceneState* state) {
         }
     }
 
-    // Score this drop
+    // Score soft dropped pieces
+    // Score is increased by the number of rows since soft drop was initiated
+    if (state->softDropInitiated) {
+        state->score += (state->playerPosition.row - state->softDropStartingRow);
+    }
+
+    // Score completed lines
     if (completedLines > 0) {
         // Score is completedLinesScore * (difficulty + 1)
         state->score += SCORING[completedLines - 1] * (state->difficulty + 1);
@@ -837,6 +854,7 @@ Scene* boardSceneCreate(int initialDifficulty) {
     state->das.frames = 0;
     state->das.key = 0;
     state->softDropInitiated = false;
+    state->softDropStartingRow = 0;
 
     clearMatrix(state->matrix);
 
