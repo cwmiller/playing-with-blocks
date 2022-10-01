@@ -18,10 +18,10 @@
 
 #define MATRIX_GRID_COLS 10
 #define MATRIX_GRID_ROWS 24
-#define MATRIX_GRID_SIZE 10
+#define MATRIX_GRID_CELL_SIZE 10
 
-#define MATRIX_GRID_TOP_X(col) (MATRIX_START_X + (col * MATRIX_GRID_SIZE))
-#define MATRIX_GRID_LEFT_Y(row) (row * MATRIX_GRID_SIZE)
+#define MATRIX_GRID_TOP_X(col) (MATRIX_START_X + (col * MATRIX_GRID_CELL_SIZE))
+#define MATRIX_GRID_LEFT_Y(row) (row * MATRIX_GRID_CELL_SIZE)
 
 #define MAX_DIFFICULTY 20
 
@@ -951,7 +951,7 @@ static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COL
                     GFX->drawBitmap(block, x, y, kBitmapUnflipped);
                 }
             } else {
-                GFX->fillRect(x, y, MATRIX_GRID_SIZE, MATRIX_GRID_SIZE, kColorWhite);
+                GFX->fillRect(x, y, MATRIX_GRID_CELL_SIZE, MATRIX_GRID_CELL_SIZE, kColorWhite);
             }
         }
     }
@@ -1170,8 +1170,8 @@ static void drawBoxPiece(Piece piece, int x, int y, int width, int height) {
             }
         }
 
-        int pieceWidth = (maxX + 1) * MATRIX_GRID_SIZE;
-        int pieceHeight = (maxY + 1) * MATRIX_GRID_SIZE;
+        int pieceWidth = (maxX + 1) * MATRIX_GRID_CELL_SIZE;
+        int pieceHeight = (maxY + 1) * MATRIX_GRID_CELL_SIZE;
 
         // Using the dimensions and the box and the piece, find the center point so we can offset the image to be in the center
         int offsetX = x + (width / 2) - (pieceWidth / 2);
@@ -1180,8 +1180,8 @@ static void drawBoxPiece(Piece piece, int x, int y, int width, int height) {
         for (int i = 0; i < piecePoints.numPoints; i++) {
             const int* point = piecePoints.points[i];
 
-            int blockX = offsetX + (MATRIX_GRID_SIZE * point[0]);
-            int blockY = offsetY + (MATRIX_GRID_SIZE * point[1]);
+            int blockX = offsetX + (MATRIX_GRID_CELL_SIZE * point[0]);
+            int blockY = offsetY + (MATRIX_GRID_CELL_SIZE * point[1]);
 
             GFX->drawBitmap(block, blockX, blockY, kBitmapUnflipped);
         }
