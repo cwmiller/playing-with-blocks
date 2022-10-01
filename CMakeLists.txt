@@ -25,8 +25,8 @@ set(CMAKE_CONFIGURATION_TYPES "Debug;Release")
 set(CMAKE_XCODE_GENERATE_SCHEME TRUE)
 
 # Game Name Customization
-set(PLAYDATE_GAME_NAME playtris)
-set(PLAYDATE_GAME_DEVICE playtris_DEVICE)
+set(PLAYDATE_GAME_NAME playing-with-blocks)
+set(PLAYDATE_GAME_DEVICE playing-with-blocks_DEVICE)
 
 project(${PLAYDATE_GAME_NAME} C ASM)
 

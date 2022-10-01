@@ -1,5 +1,5 @@
-name=Playtris
+name=Playing With Blocks
 author=Chase Miller
-description=Just a crappy Tetris clone
-bundleID=sh.miller.playtris
+description=Your favorite puzzle game, now on Playdate!
+bundleID=sh.miller.playing-with-blocks
 imagePath=
