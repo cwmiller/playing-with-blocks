@@ -466,8 +466,6 @@ static bool updateSceneStart(SceneState* state) {
         // Adjust difficulty every 10 lines
         if (state->completedLines % 10 == 0) {
             state->difficulty = difficultyForLines(state->initialDifficulty, state->completedLines);
-
-            SYS->logToConsole("Reached %d lines. Diffiulty now %d", state->completedLines, state->difficulty);
         }
 
         // Update text boxes
@@ -529,8 +527,6 @@ static bool updateSceneDropping(SceneState* state) {
         if (!state->softDropInitiated) {
             state->softDropInitiated = true;
             state->softDropStartingRow = state->playerPosition.row;
-
-            SYS->logToConsole("%d", state->softDropStartingRow);
         }
     }
 
@@ -1038,9 +1034,7 @@ static MatrixPiecePoints getPointsForPiece(Piece piece, int col, int row, int or
                 int plotCol = col + pieceCol;
                 
                 // Ensure cell is within bounds
-                if (plotRow < 0 || plotRow >= MATRIX_GRID_ROWS || plotCol < 0 || plotCol >= MATRIX_GRID_COLS) {
-                    SYS->logToConsole("Attempted to plot invalid point %d,%d for piece %d", plotCol, plotRow, piece);
-                } else {
+                if ((plotRow >= 0) && (plotRow < MATRIX_GRID_ROWS) && (plotCol >= 0) && (plotCol < MATRIX_GRID_COLS)) {
                     allPoints.points[allPoints.numPoints][0] = plotCol;
                     allPoints.points[allPoints.numPoints++][1] = plotRow;
                 }
