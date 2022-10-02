@@ -26,3 +26,13 @@ LCDFont* assetLoadFont(const char* path) {
 
     return font;
 }
+
+AudioSample* assetLoadSample(const char* path) {
+    AudioSample* sample = SND->sample->load(path);
+
+    if (sample == NULL) {
+        SYS->logToConsole("Error loading asset at path '%s'", path);
+    }
+
+    return sample;
+}

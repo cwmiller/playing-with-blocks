@@ -79,6 +79,15 @@ static LCDBitmap* gameOverFour = NULL;
 // Public Pixel font used for all text
 LCDFont* publicPixel = NULL;
 
+// Music player
+static FilePlayer* musicPlayer = NULL;
+
+// Sound effects
+static SamplePlayer* samplePlayer = NULL;
+
+static AudioSample* whoopSound = NULL;
+static AudioSample* kickSound = NULL;
+
 // All piece types
 typedef enum Piece {
     None = -1,
@@ -366,6 +375,12 @@ static inline int gravityFramesForDifficulty(int difficulty);
 static void drawBoxText(const char* text, LCDFont* font, int x, int y, int width, int height);
 static void drawBoxPiece(Piece piece, int x, int y, int width, int height);
 
+static void playMusic();
+static void stopMusic();
+static bool isMusicPlaying();
+
+static void playSample(AudioSample* sample);
+
 // Handle when scene becomes active
 static void initScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
@@ -386,6 +401,9 @@ static void initScene(Scene* scene) {
 
     clearMatrix(state->matrix);
     drawMatrix(state->matrix);
+
+    // Start playing music and loop forever
+    playMusic();
 }
 
 static void reset(SceneState* state) {
@@ -613,6 +631,11 @@ static bool updateSceneDropping(SceneState* state) {
             }
         }
 
+        // Play roation sound if rotation changed
+        if (currentPos.orientation != finalPos.orientation) {
+            playSample(whoopSound);
+        }
+
         // Update current player piece position if it has changed
         if (currentPos.col != finalPos.col || currentPos.row != finalPos.row || currentPos.orientation != finalPos.orientation) {
             MatrixPiecePoints currentPiecePoints = getPointsForPiece(state->playerPiece, state->playerPosition.col, state->playerPosition.row, state->playerPosition.orientation);
@@ -641,6 +664,9 @@ static bool updateSceneDropping(SceneState* state) {
 static bool updateSceneSettled(SceneState* state) {
     int completedLines = 0;
     bool screenUpdated = false;
+
+    // Play sound
+    playSample(kickSound);
 
     // Check for any completed rows
     for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
@@ -704,6 +730,11 @@ static bool updateSceneSettled(SceneState* state) {
 static bool updateSceneGameOver(SceneState* state) {
     bool screenUpdated = false;
 
+    // Stop music if it's playing
+    if (isMusicPlaying()) {
+        stopMusic();
+    }
+
     // Display 4 blocks that cover the playfield over a second
     if (state->statusFrames < 60) {
         if ((state->statusFrames % 15) == 0) {
@@ -725,6 +756,7 @@ static bool updateSceneGameOver(SceneState* state) {
             }
 
             if (step != NULL) {
+                playSample(kickSound);
                 GFX->drawBitmap(step, 0, 0, kBitmapUnflipped);
                 screenUpdated = true;
             }
@@ -917,6 +949,26 @@ static void loadAssets(void) {
     // Font
     if (publicPixel == NULL) {
         publicPixel = assetLoadFont("fonts/public-pixel/PublicPixel-8pt");
+    }
+
+    // FilePlayer for music
+    if (musicPlayer == NULL) {
+        musicPlayer = SND->fileplayer->newPlayer();
+
+        SND->fileplayer->loadIntoPlayer(musicPlayer, "sounds/Its-Raining-Pixels.mp3");
+    }
+
+    // Audio Samples
+    if (samplePlayer == NULL) {
+        samplePlayer = SND->sampleplayer->newPlayer();
+    }
+
+    if (whoopSound == NULL) {
+        whoopSound = assetLoadSample("sounds/8-bit_whoop.wav");
+    }
+
+    if (kickSound == NULL) {
+        kickSound = assetLoadSample("sounds/8-bit_kick14.wav");
     }
 }
 
@@ -1179,5 +1231,37 @@ static void drawBoxPiece(Piece piece, int x, int y, int width, int height) {
 
             GFX->drawBitmap(block, blockX, blockY, kBitmapUnflipped);
         }
+    }
+}
+
+// Start playing background music
+static void playMusic() {
+    if (musicPlayer != NULL) {
+        SND->fileplayer->play(musicPlayer, 0);
+    }
+}
+
+// Stops playing background music
+static void stopMusic() {
+    if (musicPlayer != NULL) {
+        SND->fileplayer->stop(musicPlayer);
+    }
+}
+
+// Returns if the background music is currently playing
+static bool isMusicPlaying() {
+    SND->fileplayer->isPlaying(musicPlayer);
+}
+
+// Play an audio sample
+// Any current playing sample will be muted
+static void playSample(AudioSample* sample) {
+    if (samplePlayer != NULL && sample != NULL) {
+        if (SND->sampleplayer->isPlaying(samplePlayer)) {
+            SND->sampleplayer->stop(samplePlayer);
+        }
+
+        SND->sampleplayer->setSample(samplePlayer, sample);
+        SND->sampleplayer->play(samplePlayer, 1, 0);
     }
 }

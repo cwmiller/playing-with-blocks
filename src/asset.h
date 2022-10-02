@@ -5,5 +5,6 @@
 
 LCDBitmap* assetLoadBitmap(const char* path);
 LCDFont* assetLoadFont(const char* path);
+AudioSample* assetLoadSample(const char* path);
 
 #endif

@@ -11,6 +11,7 @@ extern PlaydateAPI* pd;
 
 // Short-hands for sub-systems exposed by Playdate API
 #define GFX pd->graphics
+#define SND pd->sound
 #define SPR pd->sprite
 #define SYS pd->system
 
