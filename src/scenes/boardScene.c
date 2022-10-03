@@ -183,6 +183,12 @@ typedef struct SceneState {
     // Keeps track of the row the soft drop started being held
     // Used for scoring
     int softDropStartingRow;
+
+    // Toggle when UP is pressed
+    bool hardDropInitiated;
+    // Keeps track of the row where the hard drop begins
+    // Used for scoring
+    int hardDropStartingRow;
 } SceneState;
 
 // Each piece has 4 orientations which we designate as oritentation 0, 1, 2, and 3
@@ -495,6 +501,10 @@ static bool updateSceneStart(SceneState* state) {
         // Reset soft drop
         state->softDropInitiated = false;
         state->softDropStartingRow = 0;
+
+        // Reset hard drop
+        state->hardDropInitiated = false;
+        state->hardDropStartingRow = 0;
         
         // After a piece is selected, switch to ARE state
         changeStatus(state, ARE);
@@ -569,6 +579,10 @@ static bool updateSceneDropping(SceneState* state) {
         if ((pressedKeys & kButtonUp) == kButtonUp) {
             finalPos = determineDroppedPosition(state->matrix, state->playerPiece, finalPos);
             shouldSettle = true;
+
+            // Keep track of where the piece was when the soft drop was initiated so it can be scored after it settles
+            state->hardDropInitiated = true;
+            state->hardDropStartingRow = state->playerPosition.row;
         } else {
             // Adjust player movement attempt based on which button is pressed OR if DAS is in effect
 
@@ -694,6 +708,12 @@ static bool updateSceneSettled(SceneState* state) {
     // Score is increased by the number of rows since soft drop was initiated
     if (state->softDropInitiated) {
         state->score += (state->playerPosition.row - state->softDropStartingRow);
+    }
+
+    // Score hard dropped pieces
+    // Score is increased by the number of rows dropped * 2
+    if (state->hardDropInitiated) {
+        state->score += ((state->playerPosition.row - state->hardDropStartingRow) * 2);
     }
 
     // Score completed lines
@@ -870,6 +890,8 @@ Scene* boardSceneCreate(int initialDifficulty) {
     state->das.key = 0;
     state->softDropInitiated = false;
     state->softDropStartingRow = 0;
+    state->hardDropInitiated = false;
+    state->hardDropStartingRow = 0;
 
     clearMatrix(state->matrix);
 
