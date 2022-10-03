@@ -64,7 +64,6 @@ static LCDBitmap* background = NULL;
 // Block pieces
 static LCDBitmap* blockChessboard = NULL;
 static LCDBitmap* blockEye = NULL;
-static LCDBitmap* blockKnot = NULL;
 static LCDBitmap* blockTargetOpen = NULL;
 static LCDBitmap* blockTargetClosed = NULL;
 static LCDBitmap* blockTracks = NULL;
@@ -363,7 +362,7 @@ static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID
 
 static void clearMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
 static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
-static blockBitmapForPiece(Piece piece, LCDBitmap** bitmap);
+static void blockBitmapForPiece(Piece piece, LCDBitmap** bitmap);
 static MatrixPiecePoints getPointsForPiece(Piece piece, int col, int row, int orientation);
 static void addPiecePointsToMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, bool playerPiece, const MatrixPiecePoints* points);
 static void removePiecePointsFromMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points);
@@ -371,13 +370,14 @@ static bool arePointsAvailable(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_
 static Position determineDroppedPosition(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos);
 static int difficultyForLines(int initialDifficulty, int completedLines);
 static inline int gravityFramesForDifficulty(int difficulty);
+static void drawAllBoxes(SceneState* state);
 
 static void drawBoxText(const char* text, LCDFont* font, int x, int y, int width, int height);
 static void drawBoxPiece(Piece piece, int x, int y, int width, int height);
 
-static void playMusic();
-static void stopMusic();
-static bool isMusicPlaying();
+static void playMusic(void);
+static void stopMusic(void);
+static bool isMusicPlaying(void);
 
 static void playSample(AudioSample* sample);
 
@@ -486,21 +486,8 @@ static bool updateSceneStart(SceneState* state) {
             state->difficulty = difficultyForLines(state->initialDifficulty, state->completedLines);
         }
 
-        // Update text boxes
-        char scoreTxt[128];
-        char levelTxt[128];
-        char linesTxt[128];
-
-        sprintf_s(scoreTxt, 128, "%d", state->score);
-        sprintf_s(levelTxt, 128, "%d", state->difficulty);
-        sprintf_s(linesTxt, 128, "%d", state->completedLines);
-
-        drawBoxText(scoreTxt, publicPixel, SCORE_BOX_X, SCORE_BOX_Y, SCORE_BOX_WIDTH, SCORE_BOX_HEIGHT);
-        drawBoxText(levelTxt, publicPixel, LEVEL_BOX_X, LEVEL_BOX_Y, LEVEL_BOX_WIDTH, LEVEL_BOX_HEIGHT);
-        drawBoxText(linesTxt, publicPixel, LINES_BOX_X, LINES_BOX_Y, LINES_BOX_WIDTH, LINES_BOX_HEIGHT);
-
-        // Update piece displays in Next box
-        drawBoxPiece(state->standbyPiece, NEXT_BOX_X, NEXT_BOX_Y, NEXT_BOX_WIDTH, NEXT_BOX_HEIGHT);
+        // Update all boxes
+        drawAllBoxes(state);
 
         // Set gravity based on current difficulty
         state->gravityFrames = gravityFramesForDifficulty(state->difficulty);
@@ -1006,7 +993,7 @@ static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COL
 }
 
 // Get reference to bitmap for a block used by a piece
-static blockBitmapForPiece(Piece piece, LCDBitmap** bitmap) {
+static void blockBitmapForPiece(Piece piece, LCDBitmap** bitmap) {
     switch (piece) {
         case None:
             break;
@@ -1038,7 +1025,7 @@ static blockBitmapForPiece(Piece piece, LCDBitmap** bitmap) {
 static MatrixPiecePoints getPointsForPiece(Piece piece, int col, int row, int orientation) {
     MatrixPiecePoints allPoints = {
         .numPoints = 0,
-        .points = { 0, 0 }
+        .points = { { 0, 0 } }
     };
 
     int pieceCols = 3;
@@ -1168,6 +1155,29 @@ static inline int gravityFramesForDifficulty(int difficulty) {
     return DIFFICULTY_LEVELS[difficulty];
 }
 
+// Draws the level, score, lines, and next piece boxes from current state
+static void drawAllBoxes(SceneState* state) {
+    // Update text boxes
+    char* scoreTxt;
+    char* levelTxt;
+    char* linesTxt;
+
+    SYS->formatString(&scoreTxt, "%d", state->score);
+    SYS->formatString(&levelTxt, "%d", state->difficulty);
+    SYS->formatString(&linesTxt, "%d", state->completedLines);
+
+    drawBoxText(scoreTxt, publicPixel, SCORE_BOX_X, SCORE_BOX_Y, SCORE_BOX_WIDTH, SCORE_BOX_HEIGHT);
+    drawBoxText(levelTxt, publicPixel, LEVEL_BOX_X, LEVEL_BOX_Y, LEVEL_BOX_WIDTH, LEVEL_BOX_HEIGHT);
+    drawBoxText(linesTxt, publicPixel, LINES_BOX_X, LINES_BOX_Y, LINES_BOX_WIDTH, LINES_BOX_HEIGHT);
+
+    // Update piece displays in Next box
+    drawBoxPiece(state->standbyPiece, NEXT_BOX_X, NEXT_BOX_Y, NEXT_BOX_WIDTH, NEXT_BOX_HEIGHT);
+
+    SYS->realloc(scoreTxt, 0);
+    SYS->realloc(levelTxt, 0);
+    SYS->realloc(linesTxt, 0);
+}
+
 // Draw a line of text within a bounded box.
 // Centers the text within the box width and height
 static void drawBoxText(const char* text, LCDFont* font, int x, int y, int width, int height) {
@@ -1250,7 +1260,7 @@ static void stopMusic() {
 
 // Returns if the background music is currently playing
 static bool isMusicPlaying() {
-    SND->fileplayer->isPlaying(musicPlayer);
+    return SND->fileplayer->isPlaying(musicPlayer);
 }
 
 // Play an audio sample
