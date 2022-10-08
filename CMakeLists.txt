@@ -28,20 +28,28 @@ set(CMAKE_XCODE_GENERATE_SCHEME TRUE)
 set(PLAYDATE_GAME_NAME playing-with-blocks)
 set(PLAYDATE_GAME_DEVICE playing-with-blocks_DEVICE)
 
+# Source files
+set(GAME_SRC_FILES 
+	src/main.c 
+	src/asset.c 
+	src/game.c 
+	src/scenes/boardScene.c 
+	src/scenes/titleScene.c
+)
+
 project(${PLAYDATE_GAME_NAME} C ASM)
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 if (TOOLCHAIN STREQUAL "armgcc")
-	add_executable(${PLAYDATE_GAME_DEVICE} ${SDK}/C_API/buildsupport/setup.c src/main.c src/asset.c src/game.c src/scenes/boardScene.c src/scenes/titleScene.c)
-
-	# Suppress Playdate SDK warnings
-	target_include_directories(${PLAYDATE_GAME_DEVICE} SYSTEM PUBLIC ${SDK}/C_API/)
+	add_executable(${PLAYDATE_GAME_DEVICE} ${SDK}/C_API/buildsupport/setup.c ${GAME_SRC_FILES})
+	set(PLAYDATE_TARGET ${PLAYDATE_GAME_DEVICE})
 else()
-	add_library(${PLAYDATE_GAME_NAME} SHARED src/main.c src/asset.c src/game.c src/scenes/boardScene.c src/scenes/titleScene.c)
-
-	# Suppress Playdate SDK warnings
-	target_include_directories(${PLAYDATE_GAME_NAME} SYSTEM PUBLIC ${SDK}/C_API/)
+	add_library(${PLAYDATE_GAME_NAME} SHARED ${GAME_SRC_FILES})
+	set(PLAYDATE_TARGET ${PLAYDATE_GAME_NAME})
 endif()
+
+# Suppress Playdate SDK warnings
+target_include_directories(${PLAYDATE_TARGET} SYSTEM PUBLIC ${SDK}/C_API/)
 
 include(${SDK}/C_API/buildsupport/playdate_game.cmake)

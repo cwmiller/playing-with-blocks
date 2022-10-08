@@ -2,4 +2,6 @@ name=Playing With Blocks
 author=Chase Miller
 description=Your favorite puzzle game, now on Playdate!
 bundleID=sh.miller.playing-with-blocks
-imagePath=
+version=latest
+buildNumber=0
+imagePath=images
