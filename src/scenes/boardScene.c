@@ -71,6 +71,7 @@ static LCDBitmap* background = NULL;
 // Block pieces
 static LCDBitmap* blockChessboard = NULL;
 static LCDBitmap* blockEye = NULL;
+static LCDBitmap* blockBox = NULL;
 static LCDBitmap* blockTargetOpen = NULL;
 static LCDBitmap* blockTargetClosed = NULL;
 static LCDBitmap* blockTracks = NULL;
@@ -989,6 +990,10 @@ static void loadAssets(void) {
     if (blockEye == NULL) {
         blockEye = assetLoadBitmap("images/blocks/eye.png");
     }
+    
+    if (blockBox == NULL) {
+        blockBox = assetLoadBitmap("images/blocks/box.png");
+    }
 
     if (blockTargetClosed == NULL) {
         blockTargetClosed = assetLoadBitmap("images/blocks/target-closed.png");
@@ -1105,13 +1110,13 @@ static void blockBitmapForPiece(Piece piece, LCDBitmap** bitmap) {
         case None:
             break;
         case L:
-            *bitmap = blockTargetOpen;
+            *bitmap = blockTracks;
             break;
         case O:
-            *bitmap = blockChessboard;
+            *bitmap = blockBox;
             break;
         case S:
-            *bitmap = blockEye;
+            *bitmap = blockTargetOpen;
             break;
         case Z:
             *bitmap = blockTargetClosed;
@@ -1120,7 +1125,7 @@ static void blockBitmapForPiece(Piece piece, LCDBitmap** bitmap) {
             *bitmap = blockChessboard;
             break;
         case T:
-            *bitmap = blockTracks;
+            *bitmap = blockEye;
             break;
         case J:
             *bitmap = blockTracksReversed;
