@@ -524,10 +524,8 @@ static bool updateSceneStart(SceneState* state) {
     if (!canPlotPoints) {
         changeStatus(state, GameOver);
     } else {
-        // Adjust difficulty every 10 lines
-        if (state->completedLines % 10 == 0) {
-            state->difficulty = difficultyForLines(state->initialDifficulty, state->completedLines);
-        }
+        // Adjust difficulty based off how many lines have been completed
+        state->difficulty = difficultyForLines(state->initialDifficulty, state->completedLines);
 
         // Update all boxes
         drawAllBoxes(state);
