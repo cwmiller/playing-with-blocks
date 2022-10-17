@@ -20,8 +20,8 @@
 #define MATRIX_GRID_ROWS 24
 #define MATRIX_GRID_CELL_SIZE 10
 
-#define MATRIX_GRID_TOP_X(col) (MATRIX_START_X + (col * MATRIX_GRID_CELL_SIZE))
-#define MATRIX_GRID_LEFT_Y(row) (row * MATRIX_GRID_CELL_SIZE)
+#define MATRIX_GRID_LEFT_X(col) (MATRIX_START_X + (col * MATRIX_GRID_CELL_SIZE))
+#define MATRIX_GRID_TOP_Y(row) (row * MATRIX_GRID_CELL_SIZE)
 
 #define MAX_DIFFICULTY 20
 
@@ -50,6 +50,9 @@
 #define SCORE_BOX_WIDTH 69
 #define SCORE_BOX_HEIGHT 15
 
+// Limit score to 999,999
+#define MAX_SCORE 999999
+
 // Score is calculated based on the number of lines completed in one drop & the current difficulty
 static int SCORING[4] = {
     40,
@@ -57,6 +60,10 @@ static int SCORING[4] = {
     300,
     1200
 };
+
+#define ARE_FRAMES 2
+#define LINECLEAR_FRAMES 77
+#define GAMEOVER_FRAMES 77
 
 // Background
 static LCDBitmap* background = NULL;
@@ -86,6 +93,7 @@ static SamplePlayer* samplePlayer = NULL;
 
 static AudioSample* whoopSound = NULL;
 static AudioSample* kickSound = NULL;
+static AudioSample* percSound = NULL;
 
 // All piece types
 typedef enum Piece {
@@ -123,6 +131,9 @@ typedef enum Status {
     // Piece has settled into a spot
     Settled,
 
+    // Player has completed at least one line that needs cleared out
+    LineClear,
+
     // Player has reached the top and the game must end
     GameOver
 } Status;
@@ -139,6 +150,12 @@ typedef struct MatrixPiecePoints {
     int points[4][2];
     int numPoints;
 } MatrixPiecePoints;
+
+// Houses a list of completed rows during a round
+typedef struct CompletedRows  {
+    int rows[4];
+    int numRows;
+} CompletedRows;
 
 // Houses the state of keys held for DAS
 typedef struct DasState {
@@ -189,6 +206,9 @@ typedef struct SceneState {
     // Keeps track of the row where the hard drop begins
     // Used for scoring
     int hardDropStartingRow;
+
+    // Tracks which rows were completed during LineClear state
+    CompletedRows roundCompletedRows;
 } SceneState;
 
 // Each piece has 4 orientations which we designate as oritentation 0, 1, 2, and 3
@@ -353,21 +373,30 @@ static int DIFFICULTY_LEVELS[21] = {
 // Function prototpes
 
 static void reset(SceneState* state);
+static void initAudioPlayers(void);
 static void loadAssets(void);
+
+// Frame update handlers
 static bool updateSceneStart(SceneState* state);
 static bool updateSceneAre(SceneState* state);
 static bool updateSceneDropping(SceneState* state);
 static bool updateSceneSettled(SceneState* state);
+static bool updateSceneLineClear(SceneState* state);
 static bool updateSceneGameOver(SceneState* state);
 
 static void changeStatus(SceneState* state, Status status);
+
 static void updateDasCounts(DasState* state, PDButtons buttons);
 static int dasRepeatCheck(DasState* state);
 
 static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos);
 
+static CompletedRows getCompletedRows(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
+
 static void clearMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
 static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
+static void removeRowsFromMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], int* rows, int totalRows);
+
 static void blockBitmapForPiece(Piece piece, LCDBitmap** bitmap);
 static MatrixPiecePoints getPointsForPiece(Piece piece, int col, int row, int orientation);
 static void addPiecePointsToMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, bool playerPiece, const MatrixPiecePoints* points);
@@ -376,8 +405,8 @@ static bool arePointsAvailable(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_
 static Position determineDroppedPosition(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos);
 static int difficultyForLines(int initialDifficulty, int completedLines);
 static inline int gravityFramesForDifficulty(int difficulty);
-static void drawAllBoxes(SceneState* state);
 
+static void drawAllBoxes(SceneState* state);
 static void drawBoxText(const char* text, LCDFont* font, int x, int y, int width, int height);
 static void drawBoxPiece(Piece piece, int x, int y, int width, int height);
 
@@ -387,6 +416,8 @@ static bool isMusicPlaying(void);
 
 static void playSample(AudioSample* sample);
 
+static int incrementScore(int current, int add);
+
 // Handle when scene becomes active
 static void initScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
@@ -394,6 +425,7 @@ static void initScene(Scene* scene) {
     // Seed the random number generator
     srand(SYS->getCurrentTimeMilliseconds());
 
+    initAudioPlayers();
     loadAssets();
 
     // Set Public Pixel font as default
@@ -444,12 +476,16 @@ static bool updateScene(Scene* scene) {
             screenUpdated = updateSceneSettled(state);
             break;
 
+        case LineClear:
+            screenUpdated = updateSceneLineClear(state);
+            break;
+
         case GameOver:
             screenUpdated = updateSceneGameOver(state);
             break;
     }
 
-    SYS->drawFPS(0, 0);
+    // SYS->drawFPS(0, 0);
 
     return screenUpdated;
 }
@@ -516,7 +552,7 @@ static bool updateSceneStart(SceneState* state) {
 // Called on frame update when in the "ARE" state status
 // Only runs for 2 frames and is just to allow the piece to float before giving player control
 static bool updateSceneAre(SceneState* state) {
-    if (++(state->statusFrames) == 2) {
+    if (++(state->statusFrames) == ARE_FRAMES) {
         changeStatus(state, Dropping);
     }
 
@@ -669,68 +705,65 @@ static bool updateSceneSettled(SceneState* state) {
     // Play sound
     playSample(kickSound);
 
-    // Check for any completed rows
+    // Clear out player indicator
     for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
-        int completedCols = 0;
-
         for (int col = 0; col < MATRIX_GRID_COLS; col++) {
-            // Clear player indicator
             state->matrix[row][col].player = false;
-
-            if (state->matrix[row][col].filled) {
-                completedCols++;
-            }
-        }
-
-        // All columns were filled for this row. Remove it by moving the row above it down
-        if (completedCols == MATRIX_GRID_COLS) {
-            // Update completed lines tally
-            completedLines++;
-
-            for (int targetRow = row; targetRow > 0; targetRow--) {
-                int sourceRow = targetRow - 1;
-
-                for (int col = 0; col < MATRIX_GRID_COLS; col++) {
-                    state->matrix[targetRow][col].filled = state->matrix[sourceRow][col].filled;
-                    state->matrix[targetRow][col].piece = state->matrix[sourceRow][col].piece;
-                }
-            }
-            
-            // Clear top row
-            for (int col = 0; col < MATRIX_GRID_COLS; col++) {
-                state->matrix[0][col].filled = false;
-                state->matrix[0][col].piece = None;
-            }
         }
     }
+
+    // Get any completed rows
+    // If there were any, then they will be cleared out in the LineClear state
+    state->roundCompletedRows = getCompletedRows(state->matrix);
 
     // Score soft dropped pieces
     // Score is increased by the number of rows since soft drop was initiated
     if (state->softDropInitiated) {
-        state->score += (state->playerPosition.row - state->softDropStartingRow);
+        state->score = incrementScore(state->score, (state->playerPosition.row - state->softDropStartingRow));
     }
 
     // Score hard dropped pieces
     // Score is increased by the number of rows dropped * 2
     if (state->hardDropInitiated) {
-        state->score += ((state->playerPosition.row - state->hardDropStartingRow) * 2);
+        state->score = incrementScore(state->score, ((state->playerPosition.row - state->hardDropStartingRow) * 2));
     }
 
-    // Score completed lines
-    if (completedLines > 0) {
-        // Score is completedLinesScore * (difficulty + 1)
-        state->score += SCORING[completedLines - 1] * (state->difficulty + 1);
-
-        state->completedLines += completedLines;
-
-        drawMatrix(state->matrix);
-        screenUpdated = true;
-    }
-
-    // Set state back to Start so the next piece is selected and put into play
-    changeStatus(state, Start);
+    // If there were any completed lines, go into LineClear state. Else reset to Start state
+    changeStatus(state, state->roundCompletedRows.numRows > 0 ? LineClear : Start);
 
     return screenUpdated;
+}
+
+// Called on frame update when in the "LineClear" state
+// Lasts for 77 frames
+static bool updateSceneLineClear(SceneState* state) {
+    // On last frame of LineClear, clear the completed lines and score it
+    if (state->statusFrames++ == LINECLEAR_FRAMES) {
+        removeRowsFromMatrix(state->matrix, (int*)state->roundCompletedRows.rows, state->roundCompletedRows.numRows);
+
+        drawMatrix(state->matrix);
+
+        // Score completed rows
+        state->score = incrementScore(state->score, SCORING[state->roundCompletedRows.numRows - 1] * (state->difficulty + 1));
+        state->completedLines += state->roundCompletedRows.numRows;
+
+        changeStatus(state, Start);
+    } else {
+        // Every 10 frames flash the completed rows
+        if (state->statusFrames % 20 == 0) {
+            drawMatrix(state->matrix);
+        } else if (state->statusFrames % 10 == 0) {
+            for (int i = 0; i < state->roundCompletedRows.numRows; i++) {
+                int row = state->roundCompletedRows.rows[i];
+
+                GFX->fillRect(MATRIX_START_X, MATRIX_GRID_TOP_Y(row), MATRIX_WIDTH, MATRIX_GRID_CELL_SIZE, kColorWhite);
+            }
+
+            playSample(percSound);
+        } 
+    }
+
+    return true;
 }
 
 // Called on frame update when in the "GameOver" state
@@ -742,8 +775,8 @@ static bool updateSceneGameOver(SceneState* state) {
         stopMusic();
     }
 
-    // Display 4 blocks that cover the playfield over a second
-    if (state->statusFrames < 60) {
+    // Display 4 blocks that cover the playfield over 60 frames
+    if (state->statusFrames < GAMEOVER_FRAMES) {
         if ((state->statusFrames % 15) == 0) {
             LCDBitmap* step = NULL;
 
@@ -807,6 +840,30 @@ static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID
     }
 
     return shouldSettle;
+}
+
+// Retrieves the rows that have been completed by the player.
+static CompletedRows getCompletedRows(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
+    CompletedRows completedRows = {
+        .numRows = 0,
+        .rows = { 0, 0, 0, 0 }
+    };
+
+    for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
+        int completedCols = 0;
+
+        for (int col = 0; col < MATRIX_GRID_COLS; col++) {
+            if (matrix[row][col].filled) {
+                completedCols++;
+            }
+        }
+        
+        if (completedCols == MATRIX_GRID_COLS) {
+            completedRows.rows[completedRows.numRows++] = row;
+        }
+    }
+
+    return completedRows;
 }
 
 // Change current status and rest status frame counter
@@ -904,6 +961,18 @@ Scene* boardSceneCreate(int initialDifficulty) {
     return scene;
 }
 
+static void initAudioPlayers(void) {
+    // FilePlayer for music
+    if (musicPlayer == NULL) {
+        musicPlayer = SND->fileplayer->newPlayer();
+    }
+
+    // Sample player for Audio Samples
+    if (samplePlayer == NULL) {
+        samplePlayer = SND->sampleplayer->newPlayer();
+    }
+}
+
 // Preloads all bitmaps from image files
 static void loadAssets(void) {
     // Background
@@ -960,17 +1029,7 @@ static void loadAssets(void) {
         publicPixel = assetLoadFont("fonts/public-pixel/PublicPixel-8pt");
     }
 
-    // FilePlayer for music
-    if (musicPlayer == NULL) {
-        musicPlayer = SND->fileplayer->newPlayer();
-
-        SND->fileplayer->loadIntoPlayer(musicPlayer, "sounds/Its-Raining-Pixels.mp3");
-    }
-
     // Audio Samples
-    if (samplePlayer == NULL) {
-        samplePlayer = SND->sampleplayer->newPlayer();
-    }
 
     if (whoopSound == NULL) {
         whoopSound = assetLoadSample("sounds/8-bit_whoop.wav");
@@ -978,6 +1037,10 @@ static void loadAssets(void) {
 
     if (kickSound == NULL) {
         kickSound = assetLoadSample("sounds/8-bit_kick14.wav");
+    }
+
+    if (percSound == NULL) {
+        percSound = assetLoadSample("sounds/8-bit_perc.wav");
     }
 }
 
@@ -996,8 +1059,8 @@ static void clearMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
 static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
     for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
         for (int col = 0; col < MATRIX_GRID_COLS; col++) {
-            int x = MATRIX_GRID_TOP_X(col);
-            int y = MATRIX_GRID_LEFT_Y(row);
+            int x = MATRIX_GRID_LEFT_X(col);
+            int y = MATRIX_GRID_TOP_Y(row);
             
             if (matrix[row][col].filled) {
                 LCDBitmap* block = NULL;
@@ -1010,6 +1073,28 @@ static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COL
             } else {
                 GFX->fillRect(x, y, MATRIX_GRID_CELL_SIZE, MATRIX_GRID_CELL_SIZE, kColorWhite);
             }
+        }
+    }
+}
+
+// Remove completed rows from the matrix
+static void removeRowsFromMatrix(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], int* rows, int totalRows) {
+    for (int i = 0; i < totalRows; i++) {
+        int row = rows[i];
+
+        for (int targetRow = row; targetRow > 0; targetRow--) {
+            int sourceRow = targetRow - 1;
+
+            for (int col = 0; col < MATRIX_GRID_COLS; col++) {
+                matrix[targetRow][col].filled = matrix[sourceRow][col].filled;
+                matrix[targetRow][col].piece = matrix[sourceRow][col].piece;
+            }
+        }
+
+        // Clear top row
+        for (int col = 0; col < MATRIX_GRID_COLS; col++) {
+            matrix[0][col].filled = false;
+            matrix[0][col].piece = None;
         }
     }
 }
@@ -1269,6 +1354,7 @@ static void drawBoxPiece(Piece piece, int x, int y, int width, int height) {
 // Start playing background music
 static void playMusic() {
     if (musicPlayer != NULL) {
+        SND->fileplayer->loadIntoPlayer(musicPlayer, "sounds/Its-Raining-Pixels.mp3");
         SND->fileplayer->play(musicPlayer, 0);
     }
 }
@@ -1296,4 +1382,16 @@ static void playSample(AudioSample* sample) {
         SND->sampleplayer->setSample(samplePlayer, sample);
         SND->sampleplayer->play(samplePlayer, 1, 0);
     }
+}
+
+// Increment score by an amount
+// Enforces max score restriction
+static int incrementScore(int current, int add){
+    int new = current + add;
+
+    if (new > MAX_SCORE) {
+        new = MAX_SCORE;
+    }
+
+    return new;
 }
