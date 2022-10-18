@@ -698,7 +698,6 @@ static bool updateSceneDropping(SceneState* state) {
 // Called on frame update when in the "Settled" state status
 // This state only runs for one frame and checks for completed lines, scores, and removes completed lines
 static bool updateSceneSettled(SceneState* state) {
-    int completedLines = 0;
     bool screenUpdated = false;
 
     // Play sound
