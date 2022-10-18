@@ -5,4 +5,7 @@ Playing With Blocks brings everyone's favorite puzzle game to the Playdate! Sinc
 ![Playing With Blocks](https://github.com/cwmiller/playing-with-blocks/blob/master/src-assets/screenshot.png?raw=true)
 
 Music by [Eric Matyas](https://soundimage.org/) 
+
 Sound effects by [Adrien Kjer](https://samplefocus.com/users/adrien-kjer/)
+
+Public Pixel Font by [GGBotNet](https://www.ggbot.net/fonts/)
