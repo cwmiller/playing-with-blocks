@@ -963,6 +963,7 @@ static void initAudioPlayers(void) {
     // FilePlayer for music
     if (musicPlayer == NULL) {
         musicPlayer = SND->fileplayer->newPlayer();
+        SND->fileplayer->loadIntoPlayer(musicPlayer, "sounds/Its-Raining-Pixels.mp3");
     }
 
     // Sample player for Audio Samples
@@ -1356,7 +1357,6 @@ static void drawBoxPiece(Piece piece, int x, int y, int width, int height) {
 // Start playing background music
 static void playMusic() {
     if (musicPlayer != NULL) {
-        SND->fileplayer->loadIntoPlayer(musicPlayer, "sounds/Its-Raining-Pixels.mp3");
         SND->fileplayer->play(musicPlayer, 0);
     }
 }
