@@ -1,6 +1,6 @@
 #include "game.h"
 #include "scene.h"
-#include "scenes/titleScene.h"
+#include "scenes/title/titleScene.h"
 #include "global.h"
 #include "pd_api.h"
 

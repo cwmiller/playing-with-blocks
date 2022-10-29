@@ -1,5 +1,5 @@
 #include "titleScene.h"
-#include "boardScene.h"
+#include "../board/boardScene.h"
 #include "global.h"
 #include "asset.h"
 #include "scene.h"

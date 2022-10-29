@@ -33,8 +33,9 @@ set(GAME_SRC_FILES
 	src/main.c 
 	src/asset.c 
 	src/game.c 
-	src/scenes/boardScene.c 
-	src/scenes/titleScene.c
+	src/scenes/board/boardScene.c
+	src/scenes/board/matrix.c
+	src/scenes/title/titleScene.c
 )
 
 project(${PLAYDATE_GAME_NAME} C ASM)
