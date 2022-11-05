@@ -137,7 +137,7 @@ typedef struct SceneState {
     unsigned int gravityFrames;
 
     // Holds the state of each cell in the matrix
-    MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS];
+    MatrixGrid matrix;
 
     // Current player piece being controlled
     Piece playerPiece;
@@ -210,11 +210,11 @@ static void changeStatus(SceneState* state, Status status);
 static void updateDasCounts(DasState* state, PDButtons buttons);
 static int dasRepeatCheck(DasState* state);
 
-static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
+static void drawMatrix(const MatrixGrid matrix);
 
 static void blockBitmapForPiece(Piece piece, LCDBitmap** bitmap);
 
-static Position determineDroppedPosition(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos);
+static Position determineDroppedPosition(const MatrixGrid matrix, Piece piece, Position pos);
 
 static int difficultyForLines(int initialDifficulty, int completedLines);
 static inline int gravityFramesForDifficulty(int difficulty);
@@ -223,8 +223,8 @@ static void drawAllBoxes(SceneState* state);
 static void drawBoxText(const char* text, LCDFont* font, int x, int y, int width, int height);
 static void drawBoxPiece(Piece piece, int x, int y, int width, int height);
 
-static CompletedRows getCompletedRows(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
-static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos);
+static CompletedRows getCompletedRows(const MatrixGrid matrix);
+static bool canSettlePiece(const MatrixGrid matrix, Piece piece, Position pos);
 
 static void playMusic(void);
 static void stopMusic(void);
@@ -626,7 +626,7 @@ static bool updateSceneGameOver(SceneState* state) {
 }
 
 // Determine where a piece would sit if it dropped straight down
-static Position determineDroppedPosition(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos) {
+static Position determineDroppedPosition(const MatrixGrid matrix, Piece piece, Position pos) {
     for (int row = pos.row; row < MATRIX_GRID_ROWS; row++) {
         pos.row = row;
         if (canSettlePiece(matrix, piece, pos)) {
@@ -821,7 +821,7 @@ static void loadAssets(void) {
 }
 
 // Draws all cells in the playfield matrix to the screen
-static void drawMatrix(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
+static void drawMatrix(const MatrixGrid matrix) {
     for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
         for (int col = 0; col < MATRIX_GRID_COLS; col++) {
             int x = MATRIX_GRID_LEFT_X(col);
@@ -982,7 +982,7 @@ static void drawBoxPiece(Piece piece, int x, int y, int width, int height) {
 }
 
 // Returns if the given piece sits on top another piece or the floor
-static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, Position pos) {
+static bool canSettlePiece(const MatrixGrid matrix, Piece piece, Position pos) {
     bool shouldSettle = false;
     MatrixPiecePoints points = matrixGetPointsForPiece(piece, pos.col, pos.row, pos.orientation);
 
@@ -1009,7 +1009,7 @@ static bool canSettlePiece(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID
 
 
 // Retrieves the rows that have been completed by the player.
-static CompletedRows getCompletedRows(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
+static CompletedRows getCompletedRows(const MatrixGrid matrix) {
     CompletedRows completedRows = {
         .numRows = 0,
         .rows = { 0, 0, 0, 0 }

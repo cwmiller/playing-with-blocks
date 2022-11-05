@@ -199,7 +199,7 @@ MatrixPiecePoints matrixGetPointsForPiece(Piece piece, int col, int row, int ori
 } 
 
 // Fills matrix cells with visible points of a piece
-void matrixAddPiecePoints(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, bool playerPiece, const MatrixPiecePoints* points) {
+void matrixAddPiecePoints(MatrixGrid matrix, Piece piece, bool playerPiece, const MatrixPiecePoints* points) {
     for (int i = 0; i < points->numPoints; i++) {
         const int* point = points->points[i];
 
@@ -210,7 +210,7 @@ void matrixAddPiecePoints(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS],
 }
 
 // Clears matrix cells with visible points of a piece
-void matrixRemovePiecePoints(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points) {
+void matrixRemovePiecePoints(MatrixGrid matrix, const MatrixPiecePoints* points) {
     for (int i = 0; i < points->numPoints; i++) {
         const int* point = points->points[i];
 
@@ -222,7 +222,7 @@ void matrixRemovePiecePoints(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COL
 
 // Returns whether or not the given X/Y points are are not already filled in the matrix
 // Current player piece points are ignored
-bool matrixPointsAvailable(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points) {
+bool matrixPointsAvailable(const MatrixGrid matrix, const MatrixPiecePoints* points) {
     for (int i = 0; i < points->numPoints; i++) {
         const int* point = points->points[i];
         const int pointCol = point[0];
@@ -237,7 +237,7 @@ bool matrixPointsAvailable(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID
 }
 
 // Remove specified rows from the matrix
-void matrixRemoveRows(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], int* rows, int totalRows) {
+void matrixRemoveRows(MatrixGrid matrix, int* rows, int totalRows) {
     for (int i = 0; i < totalRows; i++) {
         int row = rows[i];
 
@@ -259,7 +259,7 @@ void matrixRemoveRows(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], int
 }
 
 // Unsets the player attribute on all cells
-void matrixClearPlayerIndicator(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
+void matrixClearPlayerIndicator(MatrixGrid matrix) {
   for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
         for (int col = 0; col < MATRIX_GRID_COLS; col++) {
             matrix[row][col].player = false;
@@ -268,7 +268,7 @@ void matrixClearPlayerIndicator(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_
 }
 
 // Clear all cells in the playfield matrix
-void matrixClear(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]) {
+void matrixClear(MatrixGrid matrix) {
     for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
         for (int col = 0; col < MATRIX_GRID_COLS; col++) {
            matrix[row][col].filled = false;

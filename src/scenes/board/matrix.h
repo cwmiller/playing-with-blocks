@@ -52,26 +52,28 @@ typedef struct MatrixCell {
     Piece piece;
 } MatrixCell;
 
+typedef MatrixCell MatrixGrid[MATRIX_GRID_ROWS][MATRIX_GRID_COLS];
+
 // Returns a list of all visible X,Y matrix coordinates that a peice fills based on its orientation
 MatrixPiecePoints matrixGetPointsForPiece(Piece piece, int col, int row, int orientation);
 
 // Fills matrix cells with visible points of a piece
-void matrixAddPiecePoints(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], Piece piece, bool playerPiece, const MatrixPiecePoints* points);
+void matrixAddPiecePoints(MatrixGrid matrix, Piece piece, bool playerPiece, const MatrixPiecePoints* points);
 
 // Clears matrix cells with visible points of a piece
-void matrixRemovePiecePoints(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points);
+void matrixRemovePiecePoints(MatrixGrid matrix, const MatrixPiecePoints* points);
 
 // Remove specified rows from the matrix
-void matrixRemoveRows(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], int* rows, int totalRows);
+void matrixRemoveRows(MatrixGrid matrix, int* rows, int totalRows);
 
 // Returns whether or not the given X/Y points are are not already filled in the matrix
 // Current player piece points are ignored
-bool matrixPointsAvailable(const MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS], const MatrixPiecePoints* points);
+bool matrixPointsAvailable(const MatrixGrid matrix, const MatrixPiecePoints* points);
 
 // Unsets the player attribute on all cells
-void matrixClearPlayerIndicator(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
+void matrixClearPlayerIndicator(MatrixGrid matrix);
 
 // Clear all cells in the playfield matrix
-void matrixClear(MatrixCell matrix[MATRIX_GRID_ROWS][MATRIX_GRID_COLS]);
+void matrixClear(MatrixGrid matrix);
 
 #endif
