@@ -5,10 +5,12 @@
 #include "pd_api.h"
 #include "../title/titleScene.h"
 #include "boardScene.h"
+#include "assets.h"
 #include "matrix.h"
 #include "game.h"
 #include "asset.h"
 #include "global.h"
+#include "text.h"
 
 #define PIECE_HEIGHT 30
 #define PIECE_WIDTH 20
@@ -55,37 +57,6 @@ static int SCORING[4] = {
 #define LINECLEAR_FRAMES 77
 #define GAMEOVER_FRAMES 77
 
-// Background
-static LCDBitmap* background = NULL;
-
-// Block pieces
-static LCDBitmap* blockChessboard = NULL;
-static LCDBitmap* blockEye = NULL;
-static LCDBitmap* blockBox = NULL;
-static LCDBitmap* blockTargetOpen = NULL;
-static LCDBitmap* blockTargetClosed = NULL;
-static LCDBitmap* blockTracks = NULL;
-static LCDBitmap* blockTracksReversed = NULL;
-
-// Gameover is an animation of 4 steps
-static LCDBitmap* gameOverOne = NULL;
-static LCDBitmap* gameOverTwo = NULL;
-static LCDBitmap* gameOverThree = NULL;
-static LCDBitmap* gameOverFour = NULL;
-
-// Public Pixel font used for all text
-LCDFont* publicPixel = NULL;
-
-// Music player
-static FilePlayer* musicPlayer = NULL;
-
-// Sound effects
-static SamplePlayer* samplePlayer = NULL;
-
-static AudioSample* whoopSound = NULL;
-static AudioSample* kickSound = NULL;
-static AudioSample* percSound = NULL;
-
 typedef enum Status {
     // Lasts 1 frame, piece(s) are selected and the active piece is placed at the top of the screen
     Start,
@@ -124,7 +95,11 @@ typedef struct DasState {
 
 // Contains all the current state for the scene
 typedef struct SceneState {
+    // The random seed used by piece picker
+    unsigned int seed;
+
     Status status;
+
     // Counts the number of frames for the current status
     unsigned int statusFrames;
 
@@ -191,6 +166,16 @@ static int DIFFICULTY_LEVELS[21] = {
     2
 };
 
+// Assets
+static BoardSceneBitmapAssets* bitmapAssets = NULL;
+static BoardSceneSampleAssets* sampleAssets  = NULL;
+
+// Music player
+static FilePlayer* musicPlayer = NULL;
+
+// Sound effects
+static SamplePlayer* samplePlayer = NULL;
+
 // Function prototpes
 
 static void reset(SceneState* state);
@@ -212,7 +197,7 @@ static int dasRepeatCheck(DasState* state);
 
 static void drawMatrix(const MatrixGrid matrix);
 
-static void blockBitmapForPiece(Piece piece, LCDBitmap** bitmap);
+static LCDBitmap* blockBitmapForPiece(Piece piece);
 
 static Position determineDroppedPosition(const MatrixGrid matrix, Piece piece, Position pos);
 
@@ -220,7 +205,7 @@ static int difficultyForLines(int initialDifficulty, int completedLines);
 static inline int gravityFramesForDifficulty(int difficulty);
 
 static void drawAllBoxes(SceneState* state);
-static void drawBoxText(const char* text, LCDFont* font, int x, int y, int width, int height);
+static void drawBoxText(const char* text, int x, int y, int width, int height);
 static void drawBoxPiece(Piece piece, int x, int y, int width, int height);
 
 static CompletedRows getCompletedRows(const MatrixGrid matrix);
@@ -239,19 +224,18 @@ static void initScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
 
     // Seed the random number generator
-    srand(SYS->getCurrentTimeMilliseconds());
+    srand(state->seed);
 
     initAudioPlayers();
     loadAssets();
-
-    // Set Public Pixel font as default
-    GFX->setFont(publicPixel);
 
     // Clear screen 
     GFX->clear(kColorWhite);
 
     // Draw background
-    GFX->drawBitmap(background, 0, 0, kBitmapUnflipped);
+    if (bitmapAssets != NULL && bitmapAssets->background != NULL) {
+        GFX->drawBitmap(bitmapAssets->background, 0, 0, kBitmapUnflipped);
+    }
 
     matrixClear(state->matrix);
     drawMatrix(state->matrix);
@@ -484,7 +468,9 @@ static bool updateSceneDropping(SceneState* state) {
 
         // Play roation sound if rotation changed
         if (currentPos.orientation != finalPos.orientation) {
-            playSample(whoopSound);
+            if (sampleAssets != NULL && sampleAssets->whoop) {
+                playSample(sampleAssets->whoop);
+            }
         }
 
         // Update current player piece position if it has changed
@@ -516,7 +502,9 @@ static bool updateSceneSettled(SceneState* state) {
     bool screenUpdated = false;
 
     // Play sound
-    playSample(kickSound);
+    if (sampleAssets != NULL && sampleAssets->kick != NULL) {
+        playSample(sampleAssets->kick);
+    }
 
     // Clear out player indicator
     matrixClearPlayerIndicator(state->matrix);
@@ -568,7 +556,9 @@ static bool updateSceneLineClear(SceneState* state) {
                 GFX->fillRect(MATRIX_START_X, MATRIX_GRID_TOP_Y(row), MATRIX_WIDTH, MATRIX_GRID_CELL_SIZE, kColorWhite);
             }
 
-            playSample(percSound);
+            if (sampleAssets != NULL && sampleAssets->perc != NULL) {
+                playSample(sampleAssets->perc);
+            }
         } 
     }
 
@@ -587,26 +577,30 @@ static bool updateSceneGameOver(SceneState* state) {
     // Display 4 blocks that cover the playfield over 60 frames
     if (state->statusFrames < GAMEOVER_FRAMES) {
         if ((state->statusFrames % 15) == 0) {
-            LCDBitmap* step = NULL;
+            LCDBitmap* stepBitmap = NULL;
 
-            switch (state->statusFrames / 15) {
-                case 0: 
-                    step = gameOverOne;
-                    break;
-                case 1: 
-                    step = gameOverTwo;
-                    break;
-                case 2: 
-                    step = gameOverThree;
-                    break;
-                case 3: 
-                    step = gameOverFour;
-                    break;
+            if (bitmapAssets != NULL) {
+                switch (state->statusFrames / 15) {
+                    case 0: 
+                        stepBitmap = bitmapAssets->gameOverOne;
+                        break;
+                    case 1: 
+                        stepBitmap = bitmapAssets->gameOverTwo;
+                        break;
+                    case 2: 
+                        stepBitmap = bitmapAssets->gameOverThree;
+                        break;
+                    case 3: 
+                        stepBitmap = bitmapAssets->gameOverFour;
+                        break;
+                }
             }
 
-            if (step != NULL) {
-                playSample(kickSound);
-                GFX->drawBitmap(step, 0, 0, kBitmapUnflipped);
+            if (stepBitmap != NULL) {
+                if (sampleAssets != NULL && sampleAssets->kick != NULL) {
+                    playSample(sampleAssets->kick);
+                }
+                GFX->drawBitmap(stepBitmap, 0, 0, kBitmapUnflipped);
                 screenUpdated = true;
             }
         }
@@ -701,6 +695,7 @@ Scene* boardSceneCreate(int initialDifficulty) {
 
     // Initialize scene state to default values
     SceneState* state = SYS->realloc(NULL, sizeof(SceneState));
+    state->seed = SYS->getCurrentTimeMilliseconds();
     state->initialDifficulty = initialDifficulty;
     state->difficulty = initialDifficulty;
     state->completedLines = 0;
@@ -745,78 +740,14 @@ static void initAudioPlayers(void) {
     }
 }
 
-// Preloads all bitmaps from image files
+// Preloads all assets
 static void loadAssets(void) {
-    // Background
-    if (background == NULL) {
-        background = assetLoadBitmap("images/background.png");
+    if (bitmapAssets == NULL) {
+        bitmapAssets = loadBitmapAssets();
     }
 
-    // Block pieces
-
-    if (blockChessboard == NULL) {
-        blockChessboard = assetLoadBitmap("images/blocks/chessboard.png");
-    }
-
-    if (blockEye == NULL) {
-        blockEye = assetLoadBitmap("images/blocks/eye.png");
-    }
-    
-    if (blockBox == NULL) {
-        blockBox = assetLoadBitmap("images/blocks/box.png");
-    }
-
-    if (blockTargetClosed == NULL) {
-        blockTargetClosed = assetLoadBitmap("images/blocks/target-closed.png");
-    }
-
-    if (blockTargetOpen == NULL) {
-        blockTargetOpen = assetLoadBitmap("images/blocks/target-open.png");
-    }
-
-    if (blockTracks == NULL) {
-        blockTracks = assetLoadBitmap("images/blocks/tracks.png");
-    }
-
-    if (blockTracksReversed == NULL) {
-        blockTracksReversed = assetLoadBitmap("images/blocks/tracks-reversed.png");
-    }
-
-    // Gameover steps
-
-    if (gameOverOne == NULL) {
-        gameOverOne = assetLoadBitmap("images/game-over/1.png");
-    }
-
-    if (gameOverTwo == NULL) {
-        gameOverTwo = assetLoadBitmap("images/game-over/2.png");
-    }
-
-    if (gameOverThree == NULL) {
-        gameOverThree = assetLoadBitmap("images/game-over/3.png");
-    }
-
-    if (gameOverFour == NULL) {
-        gameOverFour = assetLoadBitmap("images/game-over/4.png");
-    }
-
-    // Font
-    if (publicPixel == NULL) {
-        publicPixel = assetLoadFont("fonts/public-pixel/PublicPixel-8pt");
-    }
-
-    // Audio Samples
-
-    if (whoopSound == NULL) {
-        whoopSound = assetLoadSample("sounds/8-bit_whoop.wav");
-    }
-
-    if (kickSound == NULL) {
-        kickSound = assetLoadSample("sounds/8-bit_kick14.wav");
-    }
-
-    if (percSound == NULL) {
-        percSound = assetLoadSample("sounds/8-bit_perc.wav");
+    if (sampleAssets == NULL) {
+        sampleAssets = loadSampleAssets();
     }
 }
 
@@ -828,9 +759,7 @@ static void drawMatrix(const MatrixGrid matrix) {
             int y = MATRIX_GRID_TOP_Y(row);
             
             if (matrix[row][col].filled) {
-                LCDBitmap* block = NULL;
-
-                blockBitmapForPiece(matrix[row][col].piece, &block);
+                LCDBitmap* block = blockBitmapForPiece(matrix[row][col].piece);
 
                 if (block != NULL) {
                     GFX->drawBitmap(block, x, y, kBitmapUnflipped);
@@ -843,32 +772,38 @@ static void drawMatrix(const MatrixGrid matrix) {
 }
 
 // Get reference to bitmap for a block used by a piece
-static void blockBitmapForPiece(Piece piece, LCDBitmap** bitmap) {
-    switch (piece) {
-        case None:
-            break;
-        case L:
-            *bitmap = blockTracks;
-            break;
-        case O:
-            *bitmap = blockBox;
-            break;
-        case S:
-            *bitmap = blockTargetOpen;
-            break;
-        case Z:
-            *bitmap = blockTargetClosed;
-            break;
-        case I:
-            *bitmap = blockChessboard;
-            break;
-        case T:
-            *bitmap = blockEye;
-            break;
-        case J:
-            *bitmap = blockTracksReversed;
-            break;
+static LCDBitmap* blockBitmapForPiece(Piece piece) {
+    LCDBitmap* bitmap = NULL;
+
+    if (bitmapAssets != NULL) {
+        switch (piece) {
+            case None:
+                break;
+            case L:
+                bitmap = bitmapAssets->blockTracks;
+                break;
+            case O:
+                bitmap = bitmapAssets->blockBox;
+                break;
+            case S:
+                bitmap = bitmapAssets->blockTargetOpen;
+                break;
+            case Z:
+                bitmap = bitmapAssets->blockTargetClosed;
+                break;
+            case I:
+                bitmap = bitmapAssets->blockChessboard;
+                break;
+            case T:
+                bitmap = bitmapAssets->blockEye;
+                break;
+            case J:
+                bitmap = bitmapAssets->blockTracksReversed;
+                break;
+        }
     }
+
+    return bitmap;
 }
 
 // Calculates what the difficulty should be for the given number of completed lines
@@ -903,9 +838,9 @@ static void drawAllBoxes(SceneState* state) {
     SYS->formatString(&levelTxt, "%d", state->difficulty);
     SYS->formatString(&linesTxt, "%d", state->completedLines);
 
-    drawBoxText(scoreTxt, publicPixel, SCORE_BOX_X, SCORE_BOX_Y, SCORE_BOX_WIDTH, SCORE_BOX_HEIGHT);
-    drawBoxText(levelTxt, publicPixel, LEVEL_BOX_X, LEVEL_BOX_Y, LEVEL_BOX_WIDTH, LEVEL_BOX_HEIGHT);
-    drawBoxText(linesTxt, publicPixel, LINES_BOX_X, LINES_BOX_Y, LINES_BOX_WIDTH, LINES_BOX_HEIGHT);
+    drawBoxText(scoreTxt, SCORE_BOX_X, SCORE_BOX_Y, SCORE_BOX_WIDTH, SCORE_BOX_HEIGHT);
+    drawBoxText(levelTxt, LEVEL_BOX_X, LEVEL_BOX_Y, LEVEL_BOX_WIDTH, LEVEL_BOX_HEIGHT);
+    drawBoxText(linesTxt, LINES_BOX_X, LINES_BOX_Y, LINES_BOX_WIDTH, LINES_BOX_HEIGHT);
 
     // Update piece displays in Next box
     drawBoxPiece(state->standbyPiece, NEXT_BOX_X, NEXT_BOX_Y, NEXT_BOX_WIDTH, NEXT_BOX_HEIGHT);
@@ -917,21 +852,11 @@ static void drawAllBoxes(SceneState* state) {
 
 // Draw a line of text within a bounded box.
 // Centers the text within the box width and height
-static void drawBoxText(const char* text, LCDFont* font, int x, int y, int width, int height) {
-    GFX->setFont(font);
-
-    // Determine the height and width of the rendered text so we can center it within the box
-    int textWidth = GFX->getTextWidth(font, text, strlen(text), kASCIIEncoding, 0);
-    int textHeight = GFX->getFontHeight(font);
-
-    int centeredX = x + (width / 2) - (textWidth / 2);
-    int centeredY = y + (height /2) - (textHeight /2);
-
+static void drawBoxText(const char* text, int x, int y, int width, int height) {
     // Clear the box
     GFX->fillRect(x, y, width, height, kColorWhite);
-    
-    // Write the text
-    GFX->drawText(text, strlen(text), kASCIIEncoding, centeredX, centeredY);
+
+    textDrawCentered(text, x, y, width, height, DEFAULT_FONT_SIZE);
 }
 
 // Draw a piece within a bounded box
@@ -940,9 +865,7 @@ static void drawBoxPiece(Piece piece, int x, int y, int width, int height) {
     // Clear the box
     GFX->fillRect(x, y, width, height, kColorWhite);
 
-    LCDBitmap *block = NULL;
-
-    blockBitmapForPiece(piece, &block);
+    LCDBitmap *block = blockBitmapForPiece(piece);
 
     if (block != NULL) {
         MatrixPiecePoints piecePoints = matrixGetPointsForPiece(piece, 0, 0, 0);

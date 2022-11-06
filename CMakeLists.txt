@@ -33,6 +33,8 @@ set(GAME_SRC_FILES
 	src/main.c 
 	src/asset.c 
 	src/game.c 
+	src/text.c
+	src/scenes/board/assets.c
 	src/scenes/board/boardScene.c
 	src/scenes/board/matrix.c
 	src/scenes/title/titleScene.c

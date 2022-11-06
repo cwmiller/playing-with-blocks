@@ -1,5 +1,5 @@
-#ifndef BOARDSCENE_H
-#define BOARDSCENE_H
+#ifndef SCENES_BOARD_BOARDSCENE_H
+#define SCENES_BOARD_BOARDSCENE_H
 
 #include "scene.h"
 

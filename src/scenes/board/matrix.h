@@ -1,5 +1,5 @@
-#ifndef MATRIX_H
-#define MATRIX_H
+#ifndef SCENES_BOARD_MATRIX_H
+#define SCENES_BOARD_MATRIX_H
 
 #include <stdbool.h>
 

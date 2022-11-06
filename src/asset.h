@@ -1,5 +1,5 @@
-#ifndef ASSETS_H
-#define ASSETS_H
+#ifndef ASSET_H
+#define ASSET_H
 
 #include "pd_api.h"
 
