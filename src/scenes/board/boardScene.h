@@ -4,6 +4,6 @@
 #include "scene.h"
 
 // Create scene for Board scene
-Scene* boardSceneCreate(int initialDifficulty);
+Scene* boardSceneCreate(unsigned int seed, int initialDifficulty, bool music, bool sounds);
 
 #endif

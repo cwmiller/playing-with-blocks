@@ -30,13 +30,15 @@ set(PLAYDATE_GAME_DEVICE playing-with-blocks_DEVICE)
 
 # Source files
 set(GAME_SRC_FILES 
-	src/main.c 
 	src/asset.c 
+	src/form.c 
 	src/game.c 
+	src/main.c 
 	src/text.c
 	src/scenes/board/assets.c
 	src/scenes/board/boardScene.c
 	src/scenes/board/matrix.c
+	src/scenes/options/optionsScene.c
 	src/scenes/title/titleScene.c
 )
 

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <math.h>
 #include "pd_api.h"
+#include "../options/optionsScene.h"
 #include "../title/titleScene.h"
 #include "boardScene.h"
 #include "assets.h"
@@ -97,13 +98,15 @@ typedef struct DasState {
 typedef struct SceneState {
     // The random seed used by piece picker
     unsigned int seed;
+    int initialDifficulty;
+    bool music;
+    bool sounds;
 
     Status status;
 
     // Counts the number of frames for the current status
     unsigned int statusFrames;
-
-    int initialDifficulty;
+    
     int difficulty;
     int completedLines;
 
@@ -211,11 +214,11 @@ static void drawBoxPiece(Piece piece, int x, int y, int width, int height);
 static CompletedRows getCompletedRows(const MatrixGrid matrix);
 static bool canSettlePiece(const MatrixGrid matrix, Piece piece, Position pos);
 
-static void playMusic(void);
+static void playMusic(SceneState* state);
 static void stopMusic(void);
 static bool isMusicPlaying(void);
 
-static void playSample(AudioSample* sample);
+static void playSample(SceneState* state, AudioSample* sample);
 
 static int incrementScore(int current, int add);
 
@@ -241,11 +244,11 @@ static void initScene(Scene* scene) {
     drawMatrix(state->matrix);
 
     // Start playing music and loop forever
-    playMusic();
+    playMusic(state);
 }
 
 static void reset(SceneState* state) {
-    gameChangeScene(boardSceneCreate(state->initialDifficulty));
+    gameChangeScene(optionsSceneCreate());
 }
 
 // Called on every frame while scene is active
@@ -469,7 +472,7 @@ static bool updateSceneDropping(SceneState* state) {
         // Play roation sound if rotation changed
         if (currentPos.orientation != finalPos.orientation) {
             if (sampleAssets != NULL && sampleAssets->whoop) {
-                playSample(sampleAssets->whoop);
+                playSample(state, sampleAssets->whoop);
             }
         }
 
@@ -503,7 +506,7 @@ static bool updateSceneSettled(SceneState* state) {
 
     // Play sound
     if (sampleAssets != NULL && sampleAssets->kick != NULL) {
-        playSample(sampleAssets->kick);
+        playSample(state, sampleAssets->kick);
     }
 
     // Clear out player indicator
@@ -557,7 +560,7 @@ static bool updateSceneLineClear(SceneState* state) {
             }
 
             if (sampleAssets != NULL && sampleAssets->perc != NULL) {
-                playSample(sampleAssets->perc);
+                playSample(state, sampleAssets->perc);
             }
         } 
     }
@@ -598,7 +601,7 @@ static bool updateSceneGameOver(SceneState* state) {
 
             if (stepBitmap != NULL) {
                 if (sampleAssets != NULL && sampleAssets->kick != NULL) {
-                    playSample(sampleAssets->kick);
+                    playSample(state, sampleAssets->kick);
                 }
                 GFX->drawBitmap(stepBitmap, 0, 0, kBitmapUnflipped);
                 screenUpdated = true;
@@ -690,13 +693,16 @@ static void destroyScene(Scene* scene) {
 }
 
 // Create scene for Board scene
-Scene* boardSceneCreate(int initialDifficulty) {
+Scene* boardSceneCreate(unsigned int seed, int initialDifficulty, bool music, bool sounds) {
     Scene* scene = SYS->realloc(NULL, sizeof(Scene));
 
     // Initialize scene state to default values
     SceneState* state = SYS->realloc(NULL, sizeof(SceneState));
-    state->seed = SYS->getCurrentTimeMilliseconds();
+    //state->seed = SYS->getCurrentTimeMilliseconds();
+    state->seed = seed;
     state->initialDifficulty = initialDifficulty;
+    state->music = music;
+    state->sounds = sounds;
     state->difficulty = initialDifficulty;
     state->completedLines = 0;
     state->score = 0;
@@ -856,7 +862,7 @@ static void drawBoxText(const char* text, int x, int y, int width, int height) {
     // Clear the box
     GFX->fillRect(x, y, width, height, kColorWhite);
 
-    textDrawCentered(text, x, y, width, height, DEFAULT_FONT_SIZE);
+    textDrawCentered(text, x, y, width, height, DEFAULT_FONT_SIZE, kTextColorBlack);
 }
 
 // Draw a piece within a bounded box
@@ -957,8 +963,8 @@ static CompletedRows getCompletedRows(const MatrixGrid matrix) {
 
 
 // Start playing background music
-static void playMusic() {
-    if (musicPlayer != NULL) {
+static void playMusic(SceneState* state) {
+    if (state->music && musicPlayer != NULL) {
         SND->fileplayer->play(musicPlayer, 0);
     }
 }
@@ -977,8 +983,8 @@ static bool isMusicPlaying() {
 
 // Play an audio sample
 // Any current playing sample will be muted
-static void playSample(AudioSample* sample) {
-    if (samplePlayer != NULL && sample != NULL) {
+static void playSample(SceneState* state, AudioSample* sample) {
+    if (state->sounds && (samplePlayer != NULL) && (sample != NULL)) {
         if (SND->sampleplayer->isPlaying(samplePlayer)) {
             SND->sampleplayer->stop(samplePlayer);
         }

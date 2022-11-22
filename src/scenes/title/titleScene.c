@@ -1,5 +1,6 @@
 #include "titleScene.h"
 #include "../board/boardScene.h"
+#include "../options/optionsScene.h"
 #include "global.h"
 #include "asset.h"
 #include "scene.h"
@@ -28,7 +29,7 @@ static bool updateScene(Scene* scene) {
 
     // Press A button to start the game
     if ((released & kButtonA) == kButtonA) {
-        gameChangeScene(boardSceneCreate(0));
+        gameChangeScene(optionsSceneCreate());
 
         return true;
     } else {
