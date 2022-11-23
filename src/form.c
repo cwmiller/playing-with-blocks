@@ -216,11 +216,11 @@ static bool seedFieldKeyPress(FormField* field, PDButtons buttons) {
 
             if ((buttons & kButtonUp) == kButtonUp) {
                 if (++idx >= FORM_SEED_CHARACTER_NUM_OPTIONS) {
-                    idx = FORM_SEED_CHARACTER_NUM_OPTIONS - 1;
+                    idx = 0;
                 }
             } else if ((buttons & kButtonDown) == kButtonDown) {
                 if (--idx < 0) {
-                    idx = 0;
+                    idx = FORM_SEED_CHARACTER_NUM_OPTIONS - 1;
                 }
             }
 
@@ -246,12 +246,12 @@ static bool numericalFieldKeyPress(FormField* field, PDButtons buttons) {
     // Increment value when Up is pressed and in editing mode
     } else if (numericalField->editing && ((buttons & kButtonUp) == kButtonUp)) {
         if (++*numericalField->value > numericalField->maxValue) {
-            *numericalField->value = numericalField->maxValue;
+            *numericalField->value = numericalField->minValue;
         }
     // Decrement value when Down is pressed and in editing mode
     } else if (numericalField->editing && ((buttons & kButtonDown) == kButtonDown)) {
         if (--*numericalField->value < numericalField->minValue) {
-            *numericalField->value = numericalField->minValue;
+            *numericalField->value = numericalField->maxValue;
         }
     }
 
@@ -325,9 +325,9 @@ bool formDrawField(FormField* field) {
 
     bool highlight = false;
 
-    // Switch highlight every 30 frames when focused
+    // Switch highlight every 15 frames when focused
     if (field->focused) {
-        if (field->focusFrameCount++ == 30) {
+        if (field->focusFrameCount++ == 15) {
             field->focusFrameCount = 0;
             field->focusFlipFlop = !field->focusFlipFlop;
         }

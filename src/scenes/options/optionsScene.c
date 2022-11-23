@@ -188,6 +188,17 @@ static void destroyScene(Scene* scene) {
     GFX->fillRect(0, 0, LCD_COLUMNS, LCD_ROWS, kColorWhite);
 }
 
+void generateSeed(char** ptr) {
+    // Generate a random seed.. randomly
+    srand(SYS->getSecondsSinceEpoch(NULL));
+
+    SYS->formatString(ptr, "%02X%02X%02X%02X", 
+        rand() % 256,
+        rand() % 256,
+        rand() % 256,
+        rand() % 256);
+}
+
 // Create scene for Options screen
 Scene* optionsSceneCreate(void) {
     Scene* scene = SYS->realloc(NULL, sizeof(Scene));
@@ -209,15 +220,7 @@ Scene* optionsSceneCreate(void) {
     values->difficulty = 0;
     values->music = true;
     values->sounds = true;
-
-    // Generate a random seed.. randomly
-    srand(SYS->getSecondsSinceEpoch(NULL));
-
-    SYS->formatString(&values->seed, "%02X%02X%02X%02X", 
-        rand() % 256,
-        rand() % 256,
-        rand() % 256,
-        rand() % 256);
+    generateSeed(&values->seed);
 
     state->formValues = values;
 
@@ -227,9 +230,7 @@ Scene* optionsSceneCreate(void) {
     addField(state, formInitBooleanField(75, 100, 80, 30, "Music", &values->music));
     addField(state, formInitBooleanField(245, 100, 80, 30, "Sound", &values->sounds));
 
-    state->focusedField = addField(state, formInitButtonField((LCD_COLUMNS - 140) / 2, 160, 140, 30, "Start", state, submitHandler));
-
-
+    state->focusedField = addField(state, formInitButtonField((LCD_COLUMNS - 140) / 2, 160, 140, 30, "Play!", state, submitHandler));
     state->focusedField->field->focused = true;
 
     state->transitionToGame = false;
