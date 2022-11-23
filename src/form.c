@@ -348,7 +348,7 @@ bool formDrawField(FormField* field) {
     // Draw the label above it if specified
     if (field->label != NULL) {
         int labelHeight = textHeight(FORM_FONT_SIZE);
-        textDraw(field->label, field->x + 3, field->y - labelHeight, FORM_FONT_SIZE, kColorWhite);
+        textDraw(field->label, field->x + 3, field->y - labelHeight - 1, FORM_FONT_SIZE, kColorWhite);
     }
 
     // Draw field contents
