@@ -43,6 +43,11 @@
 #define SCORE_BOX_WIDTH 69
 #define SCORE_BOX_HEIGHT 15
 
+#define SEED_BOX_X 293
+#define SEED_BOX_Y 161
+#define SEED_BOX_WIDTH 69
+#define SEED_BOX_HEIGHT 15
+
 // Limit score to 999,999
 #define MAX_SCORE 999999
 
@@ -839,14 +844,17 @@ static void drawAllBoxes(SceneState* state) {
     char* scoreTxt;
     char* levelTxt;
     char* linesTxt;
+    char* seedTxt;
 
     SYS->formatString(&scoreTxt, "%d", state->score);
     SYS->formatString(&levelTxt, "%d", state->difficulty);
     SYS->formatString(&linesTxt, "%d", state->completedLines);
+    SYS->formatString(&seedTxt, "%08X", state->seed);
 
     drawBoxText(scoreTxt, SCORE_BOX_X, SCORE_BOX_Y, SCORE_BOX_WIDTH, SCORE_BOX_HEIGHT);
     drawBoxText(levelTxt, LEVEL_BOX_X, LEVEL_BOX_Y, LEVEL_BOX_WIDTH, LEVEL_BOX_HEIGHT);
     drawBoxText(linesTxt, LINES_BOX_X, LINES_BOX_Y, LINES_BOX_WIDTH, LINES_BOX_HEIGHT);
+    drawBoxText(seedTxt, SEED_BOX_X, SEED_BOX_Y, SEED_BOX_WIDTH, SEED_BOX_HEIGHT);
 
     // Update piece displays in Next box
     drawBoxPiece(state->standbyPiece, NEXT_BOX_X, NEXT_BOX_Y, NEXT_BOX_WIDTH, NEXT_BOX_HEIGHT);
@@ -854,6 +862,7 @@ static void drawAllBoxes(SceneState* state) {
     SYS->realloc(scoreTxt, 0);
     SYS->realloc(levelTxt, 0);
     SYS->realloc(linesTxt, 0);
+    SYS->realloc(seedTxt, 0);
 }
 
 // Draw a line of text within a bounded box.
