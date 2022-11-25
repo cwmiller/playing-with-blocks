@@ -116,7 +116,7 @@ static bool updateScene(Scene* scene) {
     // Once Start is pressed, transition to board scene
     if (state->transitionToGame) {
         // Convert seed hex value to int
-        unsigned int seed = (unsigned int)strtol(state->formValues->seed, NULL, 16);
+        unsigned int seed = (unsigned int)strtoul(state->formValues->seed, NULL, 16);
 
         gameChangeScene(boardSceneCreate(seed, state->formValues->difficulty, state->formValues->music, state->formValues->sounds));
 
