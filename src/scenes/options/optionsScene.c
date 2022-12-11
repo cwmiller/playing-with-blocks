@@ -176,6 +176,7 @@ static void destroyScene(Scene* scene) {
             FieldListItem* tmp = node;
             node = node->next;
 
+            SYS->realloc(tmp->field, 0);
             SYS->realloc(tmp, 0);
         }
     }
@@ -224,13 +225,13 @@ Scene* optionsSceneCreate(void) {
 
     state->formValues = values;
 
-    addField(state, formInitSeedField(75, 40, 140, 30, "Seed", values->seed));
-    addField(state, formInitNumericalField(245, 40, 80, 30, "Level", &values->difficulty, 0, 20));
+    addField(state, formInitSeedField(75, 54, 140, 30, "Seed", values->seed, 14, 14));
+    addField(state, formInitNumericalField(245, 54, 80, 30, "Level", &values->difficulty, 0, 20, 14, 14));
 
-    addField(state, formInitBooleanField(75, 100, 80, 30, "Music", &values->music));
-    addField(state, formInitBooleanField(245, 100, 80, 30, "Sound", &values->sounds));
+    addField(state, formInitBooleanField(75, 114, 80, 30, "Music", &values->music, 14, 14));
+    addField(state, formInitBooleanField(245, 114, 80, 30, "Sound", &values->sounds, 14, 14));
 
-    state->focusedField = addField(state, formInitButtonField((LCD_COLUMNS - 140) / 2, 160, 140, 30, "Play!", state, submitHandler));
+    state->focusedField = addField(state, formInitButtonField((LCD_COLUMNS - 140) / 2, 174, 140, 30, "Play!", 14, 14, state, submitHandler));
     state->focusedField->field->focused = true;
 
     state->transitionToGame = false;

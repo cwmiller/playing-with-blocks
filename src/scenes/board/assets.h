@@ -7,6 +7,9 @@ typedef struct BoardSceneBitmapAssets {
     // Background image
     LCDBitmap* background;
 
+    // Outer walls and game over blocks
+    LCDBitmap *column;
+
     // Block piece cells
     LCDBitmap* blockChessboard;
     LCDBitmap* blockEye;

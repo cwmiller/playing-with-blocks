@@ -12,6 +12,7 @@
 #include "asset.h"
 #include "global.h"
 #include "text.h"
+#include "form.h"
 
 #define PIECE_HEIGHT 30
 #define PIECE_WIDTH 20
@@ -48,6 +49,13 @@
 #define SEED_BOX_WIDTH 69
 #define SEED_BOX_HEIGHT 15
 
+#define GAMEOVER_FONT_SIZE 18
+
+#define BUTTON_Y SEED_BOX_Y
+#define BUTTON_X MATRIX_GRID_LEFT_X(0) - (MATRIX_GRID_CELL_SIZE / 2)
+#define BUTTON_HEIGHT (int)(MATRIX_GRID_CELL_SIZE * 2.5)
+#define BUTTON_WIDTH MATRIX_WIDTH + MATRIX_GRID_CELL_SIZE
+
 // Limit score to 999,999
 #define MAX_SCORE 999999
 
@@ -61,7 +69,7 @@ static int SCORING[4] = {
 
 #define ARE_FRAMES 2
 #define LINECLEAR_FRAMES 77
-#define GAMEOVER_FRAMES 77
+#define TOPOUT_FRAMES 45
 
 typedef enum Status {
     // Lasts 1 frame, piece(s) are selected and the active piece is placed at the top of the screen
@@ -80,6 +88,11 @@ typedef enum Status {
     LineClear,
 
     // Player has reached the top and the game must end
+    // Fills play area with blocks
+    // Lasts 45 frames then switches to GameOver state
+    TopOut,
+
+    // Display game over text and buttons for restarting game
     GameOver
 } Status;
 
@@ -147,6 +160,13 @@ typedef struct SceneState {
 
     // Tracks which rows were completed during LineClear state
     CompletedRows roundCompletedRows;
+
+    // Game over buttons
+    FormField* replayButton;
+    FormField* newGameButton;
+    FormField* focusedField;
+
+
 } SceneState;
 
 // How many frames per row a piece drops from gravity
@@ -186,7 +206,6 @@ static SamplePlayer* samplePlayer = NULL;
 
 // Function prototpes
 
-static void reset(SceneState* state);
 static void initAudioPlayers(void);
 static void loadAssets(void);
 
@@ -196,6 +215,7 @@ static bool updateSceneAre(SceneState* state);
 static bool updateSceneDropping(SceneState* state);
 static bool updateSceneSettled(SceneState* state);
 static bool updateSceneLineClear(SceneState* state);
+static bool updateSceneTopOut(SceneState* state);
 static bool updateSceneGameOver(SceneState* state);
 
 static void changeStatus(SceneState* state, Status status);
@@ -252,10 +272,6 @@ static void initScene(Scene* scene) {
     playMusic(state);
 }
 
-static void reset(SceneState* state) {
-    gameChangeScene(optionsSceneCreate());
-}
-
 // Called on every frame while scene is active
 static bool updateScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
@@ -288,12 +304,16 @@ static bool updateScene(Scene* scene) {
             screenUpdated = updateSceneLineClear(state);
             break;
 
+        case TopOut:
+            screenUpdated = updateSceneTopOut(state);
+            break;
+
         case GameOver:
             screenUpdated = updateSceneGameOver(state);
             break;
     }
 
-    // SYS->drawFPS(0, 0);
+    //SYS->drawFPS(0, 0);
 
     return screenUpdated;
 }
@@ -320,7 +340,7 @@ static bool updateSceneStart(SceneState* state) {
 
     MatrixPiecePoints playerPoints = matrixGetPointsForPiece(state->playerPiece, playerPos.col, playerPos.row, playerPos.orientation);
 
-    // A game over occurs when the player piece's starting position overlaps a piece on the board
+    // A top out occurs when the player piece's starting position overlaps a piece on the board
     bool canPlotPoints = matrixPointsAvailable(state->matrix, &playerPoints);
 
     // Draw the new player piece even if it overwrites an existing piece
@@ -329,7 +349,7 @@ static bool updateSceneStart(SceneState* state) {
     drawMatrix(state->matrix);
 
     if (!canPlotPoints) {
-        changeStatus(state, GameOver);
+        changeStatus(state, TopOut);
     } else {
         // Adjust difficulty based off how many lines have been completed
         state->difficulty = difficultyForLines(state->initialDifficulty, state->completedLines);
@@ -573,8 +593,8 @@ static bool updateSceneLineClear(SceneState* state) {
     return true;
 }
 
-// Called on frame update when in the "GameOver" state
-static bool updateSceneGameOver(SceneState* state) {
+// Called on frame update when in the "TopOut" state
+static bool updateSceneTopOut(SceneState* state) {
     bool screenUpdated = false;
 
     // Stop music if it's playing
@@ -582,49 +602,92 @@ static bool updateSceneGameOver(SceneState* state) {
         stopMusic();
     }
 
-    // Display 4 blocks that cover the playfield over 60 frames
-    if (state->statusFrames < GAMEOVER_FRAMES) {
+    // Display 4 chunks of blocks that cover the playfield over 45 frames
+    // On last frame switch to GameOver state
+    if (state->statusFrames <= TOPOUT_FRAMES) {
         if ((state->statusFrames % 15) == 0) {
-            LCDBitmap* stepBitmap = NULL;
+            int i = state->statusFrames / 15;
+            int startRow = (MATRIX_GRID_ROWS - 1) - (i * (MATRIX_GRID_ROWS / 4));
+            int endRow = startRow - (MATRIX_GRID_ROWS / 4);
 
-            if (bitmapAssets != NULL) {
-                switch (state->statusFrames / 15) {
-                    case 0: 
-                        stepBitmap = bitmapAssets->gameOverOne;
-                        break;
-                    case 1: 
-                        stepBitmap = bitmapAssets->gameOverTwo;
-                        break;
-                    case 2: 
-                        stepBitmap = bitmapAssets->gameOverThree;
-                        break;
-                    case 3: 
-                        stepBitmap = bitmapAssets->gameOverFour;
-                        break;
+            for (int row = startRow; row > endRow; row--) {
+                int y = MATRIX_GRID_TOP_Y(row);
+
+                for (int col = 0; col < MATRIX_GRID_COLS; col++) {
+                    int x = MATRIX_GRID_LEFT_X(col);
+
+                    GFX->drawBitmap(bitmapAssets->column, x, y, kBitmapUnflipped);
+                    screenUpdated = true;
                 }
             }
 
-            if (stepBitmap != NULL) {
-                if (sampleAssets != NULL && sampleAssets->kick != NULL) {
-                    playSample(state, sampleAssets->kick);
-                }
-                GFX->drawBitmap(stepBitmap, 0, 0, kBitmapUnflipped);
-                screenUpdated = true;
-            }
+
+            playSample(state, sampleAssets->kick);
         }
 
         state->statusFrames++;
     } else {
-        // Pressing the A button will reset the game
-        PDButtons keys;
-        SYS->getButtonState(NULL, &keys, NULL);
-
-        if ((keys & kButtonA) == kButtonA) {
-            reset(state);
-        }
+        changeStatus(state, GameOver);
     }
 
     return screenUpdated;
+}
+
+static bool updateSceneGameOver(SceneState* state) {
+    float endPct = (float)state->statusFrames / (float)(LCD_ROWS / 10);
+
+    if (endPct <= 1) {
+        int endY = (int)(sin((endPct * 3.14159) / 2) * LCD_ROWS);
+
+        GFX->fillRect(MATRIX_GRID_LEFT_X(0) - MATRIX_GRID_CELL_SIZE, 0, MATRIX_GRID_CELL_SIZE * 12, endY, kColorBlack);
+
+        state->statusFrames++;
+    } else {
+        PDButtons buttons;
+        SYS->getButtonState(NULL, &buttons, NULL);
+
+        // Send button presses to fields first
+        if (formHandleButtons(state->focusedField, buttons)) {
+            // Form is allowing us to handle buttons
+            // Any press of a direction key changes focus
+            if ((buttons & (kButtonUp | kButtonRight | kButtonDown | kButtonLeft)) > 0) {
+                if (state->focusedField == state->replayButton) {
+                    formBlurField(state->replayButton);
+                    formFocusField(state->newGameButton);
+
+                    state->focusedField = state->newGameButton;
+                } else {
+                    formBlurField(state->newGameButton);
+                    formFocusField(state->replayButton);
+
+                    state->focusedField = state->replayButton;
+                }
+            }
+        }
+
+        int gameOverX = MATRIX_GRID_LEFT_X(0);
+        int gameOverY = NEXT_BOX_Y + NEXT_BOX_HEIGHT;
+        int gameOverWidth = MATRIX_GRID_CELL_SIZE * 10;
+        int gameOverHeight = MATRIX_GRID_CELL_SIZE * 3;
+
+        int txtHeight = textHeight(GAMEOVER_FONT_SIZE);
+        int gameTxtWidth = textWidth("Game", strlen("Game"), GAMEOVER_FONT_SIZE);
+        int overTxtWidth = textWidth("Over", strlen("Over"), GAMEOVER_FONT_SIZE);
+        int GaTxtWidth = textWidth("Ga", strlen("Ga"), GAMEOVER_FONT_SIZE);
+
+        int fullLengthWidth = textWidth("Gameer", strlen("Gameer"), GAMEOVER_FONT_SIZE);
+
+        int txtX = gameOverX + (gameOverWidth / 2) - (fullLengthWidth / 2);
+        int txtY = gameOverY + (gameOverHeight / 2) - (txtHeight * 2) / 2;
+
+        textDraw("Game", txtX, txtY, GAMEOVER_FONT_SIZE, kColorWhite);
+        textDraw("Over", txtX + GaTxtWidth, txtY + txtHeight, GAMEOVER_FONT_SIZE, kColorWhite);
+
+        formDrawField(state->replayButton);
+        formDrawField(state->newGameButton);
+    }
+
+    return true;
 }
 
 // Determine where a piece would sit if it dropped straight down
@@ -692,9 +755,30 @@ static int dasRepeatCheck(DasState* state) {
 
 // Called before scene is transitioned away
 static void destroyScene(Scene* scene) {
+    SceneState* state = (SceneState*)scene->data;
+
+    // Dispose of form fields
+    SYS->realloc(state->replayButton, 0);
+    SYS->realloc(state->newGameButton, 0);
+
     // Dispose of scene
     SYS->realloc(scene->data, 0);
     SYS->realloc(scene, 0);
+}
+
+// Handle Replay button
+// Starts a game with the same settings (incl. seed) as the previous game
+static void replayHandler(FormField* field) {
+    FormButtonField* buttonField = (FormButtonField*)field->details;
+    SceneState* state = (SceneState*)buttonField->data;
+
+    gameChangeScene(boardSceneCreate(state->seed, state->initialDifficulty, state->music, state->sounds));
+}
+
+// Handle New Game button
+// Goes back to Options screen to start a new game
+static void newGameHandler(FormField* field) {
+    gameChangeScene(optionsSceneCreate());
 }
 
 // Create scene for Board scene
@@ -703,7 +787,6 @@ Scene* boardSceneCreate(unsigned int seed, int initialDifficulty, bool music, bo
 
     // Initialize scene state to default values
     SceneState* state = SYS->realloc(NULL, sizeof(SceneState));
-    //state->seed = SYS->getCurrentTimeMilliseconds();
     state->seed = seed;
     state->initialDifficulty = initialDifficulty;
     state->music = music;
@@ -726,6 +809,11 @@ Scene* boardSceneCreate(unsigned int seed, int initialDifficulty, bool music, bo
     state->softDropStartingRow = 0;
     state->hardDropInitiated = false;
     state->hardDropStartingRow = 0;
+    state->replayButton = formInitButtonField(BUTTON_X, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "Replay", 12, 12, state, replayHandler);
+    state->newGameButton = formInitButtonField(BUTTON_X, BUTTON_Y + BUTTON_HEIGHT + 12, BUTTON_WIDTH, BUTTON_HEIGHT, "New Game", 12, 12, state, newGameHandler);
+    state->focusedField = state->replayButton;
+
+    state->replayButton->focused = true;
 
     matrixClear(state->matrix);
 

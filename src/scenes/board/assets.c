@@ -8,6 +8,7 @@ BoardSceneBitmapAssets* loadBitmapAssets() {
 
     if (assets != NULL) {
         assets->background = assetLoadBitmap("images/background.png");
+        assets->column = assetLoadBitmap("images/column.png");
         assets->blockChessboard = assetLoadBitmap("images/blocks/chessboard.png");
         assets->blockEye = assetLoadBitmap("images/blocks/eye.png");
         assets->blockBox = assetLoadBitmap("images/blocks/box.png");

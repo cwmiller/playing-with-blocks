@@ -4,7 +4,7 @@
 #include "text.h"
 
 #define FORM_SEED_CHARACTER_NUM_OPTIONS 16
-#define FORM_FONT_SIZE 14
+//#define FORM_FONT_SIZE 14
 
 static char SEED_CHARACTERS[FORM_SEED_CHARACTER_NUM_OPTIONS] = {
     '0',
@@ -29,7 +29,7 @@ static char SEED_CHARACTERS[FORM_SEED_CHARACTER_NUM_OPTIONS] = {
  * Initializers
 */
 
-static FormField* initField(FormFieldType type, int x, int y, int width, int height, const char* label, void* details) {
+static FormField* initField(FormFieldType type, int x, int y, int width, int height, const char* label, int labelFontSize, int valueFontSize, void* details) {
     FormField* field = SYS->realloc(NULL, sizeof(FormField));
     field->type = type;
     field->x = x;
@@ -37,6 +37,8 @@ static FormField* initField(FormFieldType type, int x, int y, int width, int hei
     field->width = width;
     field->height = height;
     field->label = label;
+    field->labelFontSize = labelFontSize;
+    field->valueFontSize = valueFontSize;
     field->details = details;
 
     field->focused = false;
@@ -47,42 +49,42 @@ static FormField* initField(FormFieldType type, int x, int y, int width, int hei
 }
 
 // Initialize a Seed field, used to set a hexadecimal-based seed for the RNG
-FormField* formInitSeedField(int x, int y, int width, int height, const char* label, char* value) {
+FormField* formInitSeedField(int x, int y, int width, int height, const char* label, char* value, int labelFontSize, int valueFontSize) {
     FormSeedField* field = SYS->realloc(NULL, sizeof(FormSeedField));
     field->value = value;
     field->editing = false;
     field->editingIndex = 0;
 
-    return initField(kSeed, x, y, width, height, label, (void*)field);
+    return initField(kSeed, x, y, width, height, label, labelFontSize, valueFontSize, (void*)field);
 }
 
 // Initialize a Numerical field, used to increment/decrement a number
-FormField* formInitNumericalField(int x, int y, int width, int height, const char* label, int* value, int minValue, int maxValue) {
+FormField* formInitNumericalField(int x, int y, int width, int height, const char* label, int* value, int minValue, int maxValue, int labelFontSize, int valueFontSize) {
     FormNumericalField* field = SYS->realloc(NULL, sizeof(FormNumericalField));
     field->value = value;
     field->minValue = minValue;
     field->maxValue = maxValue;
     field->editing = false;
 
-    return initField(kNumerical, x, y, width, height, label, (void*)field);
+    return initField(kNumerical, x, y, width, height, label, labelFontSize, valueFontSize, (void*)field);
 }
 
 // Initialize a Boolean field, used as a Yes/No field
-FormField* formInitBooleanField(int x, int y, int width, int height, const char* label, bool* value) {
+FormField* formInitBooleanField(int x, int y, int width, int height, const char* label, bool* value, int labelFontSize, int valueFontSize) {
     FormBooleanField* field = SYS->realloc(NULL, sizeof(FormBooleanField));
     field->value = value;
 
-    return initField(kBoolean, x, y, width, height, label, (void*)field);
+    return initField(kBoolean, x, y, width, height, label, labelFontSize, valueFontSize, (void*)field);
 }
 
 // Initialize a Button field, which will call the handler function when pressed
-FormField* formInitButtonField(int x, int y, int width, int height, const char* value, void* data, FormButtonFieldHandler handler) {
+FormField* formInitButtonField(int x, int y, int width, int height, const char* value, int labelFontSize, int valueFontSize, void* data, FormButtonFieldHandler handler) {
     FormButtonField* field = SYS->realloc(NULL, sizeof(FormButtonField));
     field->value = value;
     field->data = data;
     field->handler = handler;
 
-    return initField(kButton, x, y, width, height, NULL, (void*)field);
+    return initField(kButton, x, y, width, height, NULL, labelFontSize, valueFontSize, (void*)field);
 }
 
 /*
@@ -90,14 +92,14 @@ FormField* formInitButtonField(int x, int y, int width, int height, const char* 
 */
 
 // Draw seed field contents
-static bool seedFieldDraw(int x, int y, int width, int height, FormSeedField* field) {
-    textDrawCentered(field->value, x, y, width, height, FORM_FONT_SIZE, kColorBlack);
+static bool seedFieldDraw(int x, int y, int width, int height, int fontSize, FormSeedField* field) {
+    textDrawCentered(field->value, x, y, width, height, fontSize, kColorBlack);
 
     // If editing, draw a line under the character being edited
     if (field->editing) {
         // First find where the entire text block's top Y and left X start
-        int tWidth = textWidth(field->value, FORM_SEED_FIELD_LENGTH, FORM_FONT_SIZE);
-        int tHeight = textHeight(FORM_FONT_SIZE);
+        int tWidth = textWidth(field->value, FORM_SEED_FIELD_LENGTH, fontSize);
+        int tHeight = textHeight(fontSize);
 
         int leftX = x + (width / 2) - (tWidth / 2);
         int topY = y + (height / 2) - (tHeight / 2);
@@ -122,10 +124,10 @@ static bool seedFieldDraw(int x, int y, int width, int height, FormSeedField* fi
         previousStr[i] = '\0';
 
         // Get drawn width of previous text
-        int precedingWidth = textWidth(previousStr, strlen(previousStr), FORM_FONT_SIZE);
+        int precedingWidth = textWidth(previousStr, strlen(previousStr), fontSize);
 
         // We'll also need to get the length of just the character being editing so we know how long the line should be
-        int characterWidth = textWidth(&field->value[field->editingIndex], 1, FORM_FONT_SIZE);
+        int characterWidth = textWidth(&field->value[field->editingIndex], 1, fontSize);
 
         int lineX = leftX + precedingWidth;
 
@@ -136,18 +138,18 @@ static bool seedFieldDraw(int x, int y, int width, int height, FormSeedField* fi
 }
 
 // Draw Numerical field contents
-static bool numericalFieldDraw(int x, int y, int width, int height, FormNumericalField* field) {
+static bool numericalFieldDraw(int x, int y, int width, int height, int fontSize, FormNumericalField* field) {
     // Format current number value as a string
     char *str;
 
     SYS->formatString(&str, "%d", *field->value);
 
-    textDrawCentered(str, x, y, width, height, FORM_FONT_SIZE, kColorBlack);
+    textDrawCentered(str, x, y, width, height, fontSize, kColorBlack);
 
     // Draw underline under value if editing
     if (field->editing) {
-        int tWidth = textWidth(str, strlen(str), FORM_FONT_SIZE);
-        int tHeight = textHeight(FORM_FONT_SIZE);
+        int tWidth = textWidth(str, strlen(str), fontSize);
+        int tHeight = textHeight(fontSize);
 
         int leftX = x + (width / 2) - (tWidth / 2);
         int topY = y + (height / 2) - (tHeight / 2);
@@ -159,15 +161,15 @@ static bool numericalFieldDraw(int x, int y, int width, int height, FormNumerica
 }
 
 // Draw boolean field contents
-static bool booleanFieldDraw(int x, int y, int width, int height, FormBooleanField* field) {
-    textDrawCentered(*field->value ? "On" : "Off", x, y, width, height, FORM_FONT_SIZE, kColorBlack);
+static bool booleanFieldDraw(int x, int y, int width, int height, int fontSize, FormBooleanField* field) {
+    textDrawCentered(*field->value ? "On" : "Off", x, y, width, height, fontSize, kColorBlack);
 
     return true;
 }
 
 // Draw button field contents
-static bool buttonFieldDraw(int x, int y, int width, int height, FormButtonField* field) {
-    textDrawCentered(field->value, x, y, width, height, FORM_FONT_SIZE, kColorBlack);
+static bool buttonFieldDraw(int x, int y, int width, int height, int fontSize, FormButtonField* field) {
+    textDrawCentered(field->value, x, y, width, height, fontSize, kColorBlack);
 
     return true;
 }
@@ -347,23 +349,23 @@ bool formDrawField(FormField* field) {
 
     // Draw the label above it if specified
     if (field->label != NULL) {
-        int labelHeight = textHeight(FORM_FONT_SIZE);
-        textDraw(field->label, field->x + 3, field->y - labelHeight - 1, FORM_FONT_SIZE, kColorWhite);
+        int labelHeight = textHeight(field->labelFontSize);
+        textDraw(field->label, field->x + 3, field->y - labelHeight - 1, field->labelFontSize, kColorWhite);
     }
 
     // Draw field contents
     switch (field->type) {
         case kSeed:
-            seedFieldDraw(field->x, field->y, field->width, field->height, (FormSeedField*)field->details);
+            seedFieldDraw(field->x, field->y, field->width, field->height, field->valueFontSize, (FormSeedField*)field->details);
             break;
         case kNumerical:
-            numericalFieldDraw(field->x, field->y, field->width, field->height, (FormNumericalField*)field->details);
+            numericalFieldDraw(field->x, field->y, field->width, field->height, field->valueFontSize, (FormNumericalField*)field->details);
             break;
         case kBoolean:
-            booleanFieldDraw(field->x, field->y, field->width, field->height, (FormBooleanField*)field->details);
+            booleanFieldDraw(field->x, field->y, field->width, field->height, field->valueFontSize, (FormBooleanField*)field->details);
             break;
         case kButton:
-            buttonFieldDraw(field->x, field->y, field->width, field->height, (FormButtonField*)field->details);
+            buttonFieldDraw(field->x, field->y, field->width, field->height, field->valueFontSize, (FormButtonField*)field->details);
             break;
     }
 

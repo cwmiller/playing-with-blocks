@@ -20,6 +20,10 @@ typedef struct FormField {
     int y;
     int width;
     int height;
+
+    int labelFontSize;
+    int valueFontSize;
+
     void* details;
     int frameCount;
 
@@ -62,16 +66,16 @@ typedef struct FormButtonField {
  */
 
 // Initialize a Seed field, used to set a hexadecimal-based seed for the RNG
-FormField* formInitSeedField(int x, int y, int width, int height, const char* label, char* value);
+FormField* formInitSeedField(int x, int y, int width, int height, const char* label, char* value, int labelFontSize, int valueFontSize);
 
 // Initialize a Numerical field, used to increment/decrement a number
-FormField* formInitNumericalField(int x, int y, int width, int height, const char* label, int* value, int minValue, int maxValue);
+FormField* formInitNumericalField(int x, int y, int width, int height, const char* label, int* value, int minValue, int maxValue, int labelFontSize, int valueFontSize);
 
 // Initialize a Boolean field, used as a Yes/No field
-FormField* formInitBooleanField(int x, int y, int width, int height, const char* label, bool* value);
+FormField* formInitBooleanField(int x, int y, int width, int height, const char* label, bool* value, int labelFontSize, int valueFontSize);
 
 // Initialize a Button field, which will call the handler function when pressed
-FormField* formInitButtonField(int x, int y, int width, int height, const char* value, void* data, FormButtonFieldHandler handler);
+FormField* formInitButtonField(int x, int y, int width, int height, const char* value, int labelFontSize, int valueFontSize, void* data, FormButtonFieldHandler handler);
 
 /*
  * Events
