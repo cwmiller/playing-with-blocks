@@ -34,6 +34,7 @@ set(GAME_SRC_FILES
 	src/form.c 
 	src/game.c 
 	src/main.c 
+	src/rand.c
 	src/text.c
 	src/scenes/board/assets.c
 	src/scenes/board/boardScene.c

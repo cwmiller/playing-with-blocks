@@ -13,6 +13,7 @@
 #include "global.h"
 #include "text.h"
 #include "form.h"
+#include "rand.h"
 
 #define PIECE_HEIGHT 30
 #define PIECE_WIDTH 20
@@ -252,7 +253,7 @@ static void initScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
 
     // Seed the random number generator
-    srand(state->seed);
+    rand_seed(state->seed);
 
     initAudioPlayers();
     loadAssets();
@@ -325,11 +326,11 @@ static bool updateSceneStart(SceneState* state) {
     if (state->standbyPiece != None) {
         state->playerPiece = state->standbyPiece;
     } else {
-        state->playerPiece = rand() % 7;
+        state->playerPiece = rand_next() % 7;
     }
 
     // Randomly select the next piece in line
-    state->standbyPiece = rand() % 7;
+    state->standbyPiece = rand_next() % 7;
 
     // Place the player piece up top the matrix in the default orientation
     state->playerPosition.col = 4;

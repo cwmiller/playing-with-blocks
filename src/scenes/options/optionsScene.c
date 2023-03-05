@@ -4,6 +4,7 @@
 #include "scene.h"
 #include "form.h"
 #include "game.h"
+#include "rand.h"
 #include "text.h"
 
 typedef struct FieldListItem {
@@ -191,13 +192,13 @@ static void destroyScene(Scene* scene) {
 
 void generateSeed(char** ptr) {
     // Generate a random seed.. randomly
-    srand(SYS->getSecondsSinceEpoch(NULL));
+    rand_seed(SYS->getSecondsSinceEpoch(NULL));
 
     SYS->formatString(ptr, "%02X%02X%02X%02X", 
-        rand() % 256,
-        rand() % 256,
-        rand() % 256,
-        rand() % 256);
+        rand_next() % 256,
+        rand_next() % 256,
+        rand_next() % 256,
+        rand_next() % 256);
 }
 
 // Create scene for Options screen
