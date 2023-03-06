@@ -206,6 +206,7 @@ void matrixAddPiecePoints(MatrixGrid matrix, Piece piece, bool playerPiece, cons
         matrix[point[1]][point[0]].filled = true;
         matrix[point[1]][point[0]].player = playerPiece;
         matrix[point[1]][point[0]].piece = piece;
+        matrix[point[1]][point[0]].dirty = true;
     }
 }
 
@@ -217,6 +218,7 @@ void matrixRemovePiecePoints(MatrixGrid matrix, const MatrixPiecePoints* points)
         matrix[point[1]][point[0]].filled = false;
         matrix[point[1]][point[0]].player = false;
         matrix[point[1]][point[0]].piece = None;
+        matrix[point[1]][point[0]].dirty = true;
     }
 }
 
@@ -247,6 +249,7 @@ void matrixRemoveRows(MatrixGrid matrix, int* rows, int totalRows) {
             for (int col = 0; col < MATRIX_GRID_COLS; col++) {
                 matrix[targetRow][col].filled = matrix[sourceRow][col].filled;
                 matrix[targetRow][col].piece = matrix[sourceRow][col].piece;
+                matrix[targetRow][col].dirty = true;
             }
         }
 
@@ -254,6 +257,7 @@ void matrixRemoveRows(MatrixGrid matrix, int* rows, int totalRows) {
         for (int col = 0; col < MATRIX_GRID_COLS; col++) {
             matrix[0][col].filled = false;
             matrix[0][col].piece = None;
+            matrix[0][col].dirty = true;
         }
     }
 }
@@ -274,6 +278,7 @@ void matrixClear(MatrixGrid matrix) {
            matrix[row][col].filled = false;
            matrix[row][col].player = false;
            matrix[row][col].piece = None;
+           matrix[row][col].dirty = true;
         }
     }
 }

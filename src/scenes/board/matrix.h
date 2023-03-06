@@ -43,6 +43,9 @@ typedef struct MatrixPiecePoints {
 // These blocks can either be remains from previous pieces, or the active piece
 // being controlled by the player
 typedef struct MatrixCell {
+    // Indicates that the cell has updated since the last draw
+    bool dirty;
+
     // Indicates that this cell is occupied by the active player piece
     bool player;
 

@@ -224,7 +224,7 @@ static void changeStatus(SceneState* state, Status status);
 static void updateDasCounts(DasState* state, PDButtons buttons);
 static int dasRepeatCheck(DasState* state);
 
-static void drawMatrix(const MatrixGrid matrix);
+static void drawMatrix(MatrixGrid matrix, bool forceFull);
 
 static LCDBitmap* blockBitmapForPiece(Piece piece);
 
@@ -267,7 +267,7 @@ static void initScene(Scene* scene) {
     }
 
     matrixClear(state->matrix);
-    drawMatrix(state->matrix);
+    drawMatrix(state->matrix, false);
 
     // Start playing music and loop forever
     playMusic(state);
@@ -347,7 +347,7 @@ static bool updateSceneStart(SceneState* state) {
     // Draw the new player piece even if it overwrites an existing piece
     matrixAddPiecePoints(state->matrix, state->playerPiece, true, &playerPoints);
 
-    drawMatrix(state->matrix);
+    drawMatrix(state->matrix, false);
 
     if (!canPlotPoints) {
         changeStatus(state, TopOut);
@@ -514,7 +514,7 @@ static bool updateSceneDropping(SceneState* state) {
             state->playerPosition = finalPos;
 
             screenUpdated = true;
-            drawMatrix(state->matrix);
+            drawMatrix(state->matrix, false);
         }
 
         if (shouldSettle) {
@@ -567,7 +567,7 @@ static bool updateSceneLineClear(SceneState* state) {
     if (state->statusFrames++ == LINECLEAR_FRAMES) {
         matrixRemoveRows(state->matrix, (int*)state->roundCompletedRows.rows, state->roundCompletedRows.numRows);
 
-        drawMatrix(state->matrix);
+        drawMatrix(state->matrix, true);
 
         // Score completed rows
         state->score = incrementScore(state->score, SCORING[state->roundCompletedRows.numRows - 1] * (state->difficulty + 1));
@@ -577,7 +577,7 @@ static bool updateSceneLineClear(SceneState* state) {
     } else {
         // Every 10 frames flash the completed rows
         if (state->statusFrames % 20 == 0) {
-            drawMatrix(state->matrix);
+            drawMatrix(state->matrix, true);
         } else if (state->statusFrames % 10 == 0) {
             for (int i = 0; i < state->roundCompletedRows.numRows; i++) {
                 int row = state->roundCompletedRows.rows[i];
@@ -854,20 +854,25 @@ static void loadAssets(void) {
 }
 
 // Draws all cells in the playfield matrix to the screen
-static void drawMatrix(const MatrixGrid matrix) {
+// forceFull will force drawing the whole grid if true, else will only draw blocks marked as dirty
+static void drawMatrix(MatrixGrid matrix, bool forceFull) {
     for (int row = 0; row < MATRIX_GRID_ROWS; row++) {
         for (int col = 0; col < MATRIX_GRID_COLS; col++) {
-            int x = MATRIX_GRID_LEFT_X(col);
-            int y = MATRIX_GRID_TOP_Y(row);
-            
-            if (matrix[row][col].filled) {
-                LCDBitmap* block = blockBitmapForPiece(matrix[row][col].piece);
+            if (forceFull || matrix[row][col].dirty) {
+                int x = MATRIX_GRID_LEFT_X(col);
+                int y = MATRIX_GRID_TOP_Y(row);
+                
+                if (matrix[row][col].filled) {
+                    LCDBitmap* block = blockBitmapForPiece(matrix[row][col].piece);
 
-                if (block != NULL) {
-                    GFX->drawBitmap(block, x, y, kBitmapUnflipped);
+                    if (block != NULL) {
+                        GFX->drawBitmap(block, x, y, kBitmapUnflipped);
+                    }
+                } else {
+                    GFX->fillRect(x, y, MATRIX_GRID_CELL_SIZE, MATRIX_GRID_CELL_SIZE, kColorWhite);
                 }
-            } else {
-                GFX->fillRect(x, y, MATRIX_GRID_CELL_SIZE, MATRIX_GRID_CELL_SIZE, kColorWhite);
+
+                matrix[row][col].dirty = false;
             }
         }
     }
