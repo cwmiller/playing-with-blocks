@@ -831,7 +831,9 @@ static void initAudioPlayers(void) {
     // FilePlayer for music
     if (musicPlayer == NULL) {
         musicPlayer = SND->fileplayer->newPlayer();
-        SND->fileplayer->loadIntoPlayer(musicPlayer, "sounds/Its-Raining-Pixels.mp3");
+        if (!SND->fileplayer->loadIntoPlayer(musicPlayer, "sounds/its-raining-pixels")) {
+            SYS->logToConsole("Error loading music");
+        }
     }
 
     // Sample player for Audio Samples
