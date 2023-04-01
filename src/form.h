@@ -38,10 +38,25 @@ typedef struct FormFieldListItem {
     struct FormFieldListItem* next;
 } FormFieldListItem;
 
+
+// Houses the state of buttons held for button repeats
+typedef struct ButtonRepeatState {
+    // Current buttons being held (only holds diretction buttons)
+    PDButtons buttons;
+
+    // Whether the button has been pressed long enough to start repeating
+    bool isCharged;
+
+    // Current frame count 
+    int frames;
+} ButtonRepeatState;
+
 typedef struct Form {
     FormFieldListItem* fieldListHead;
     FormFieldListItem* fieldListTail;
     FormFieldListItem* focusedFieldItem;
+
+    ButtonRepeatState btnRepeat;
 
     int focusFrameCount;
     bool focusFlipFlop;

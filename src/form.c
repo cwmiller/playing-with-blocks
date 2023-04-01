@@ -5,6 +5,9 @@
 
 #define FORM_SEED_CHARACTER_NUM_OPTIONS 16
 
+#define BUTTON_CHARGE_DELAY 19
+#define BUTTON_REPEAT_DELAY 7
+
 static char SEED_CHARACTERS[FORM_SEED_CHARACTER_NUM_OPTIONS] = {
     '0',
     '1',
@@ -58,7 +61,18 @@ Form* formCreate() {
     form->focusFrameCount = 0;
     form->focusFlipFlop = false;
 
+    form->btnRepeat.buttons = 0;
+    form->btnRepeat.frames = 0;
+    form->btnRepeat.isCharged = false;
+
     return form;
+}
+
+// Reset button repeat state
+void formResetRepeat(Form* form) {
+    form->btnRepeat.buttons = 0;
+    form->btnRepeat.frames = 0;
+    form->btnRepeat.isCharged = false;
 }
 
 // Add a field to a form
@@ -99,6 +113,9 @@ void formFocus(Form* form, FormField* field) {
 
     if (listItem != NULL) {
         form->focusedFieldItem = listItem;
+
+        // Changing focus resets button repeats
+        formResetRepeat(form);
     }
 }
 
@@ -291,8 +308,8 @@ static void formDrawAllFields(Form *form) {
     }
 }
 
-// Handle keypress on Seed field
-static bool seedFieldHandleKeyPress(FormField* field, PDButtons buttons) {
+// Handle buttons on Seed field
+static bool seedFieldHandleButtons(FormField* field, PDButtons buttons) {
     FormSeedField* seedField = (FormSeedField*)field->details;
 
     // Pressing A will toggle editing mode
@@ -349,8 +366,8 @@ static bool seedFieldHandleKeyPress(FormField* field, PDButtons buttons) {
     return true;
 }
 
-// Handle keypress on Numerical field
-static bool numericalFieldHandleKeyPress(FormField* field, PDButtons buttons) {
+// Handle buttons on Numerical field
+static bool numericalFieldHandleButtons(FormField* field, PDButtons buttons) {
     FormNumericalField* numericalField = (FormNumericalField*)field->details;
 
     // Pressing A will toggle editing mode
@@ -370,12 +387,12 @@ static bool numericalFieldHandleKeyPress(FormField* field, PDButtons buttons) {
         }
     }
 
-    // Don't allow parent to handle key presses if in editing mode
+    // Don't allow parent to handle button presses if in editing mode
     return !numericalField->isEditing;
 }
 
-// Handle keypress on Boolean field
-static bool booleanFieldHandleKeyPress(FormField* field, PDButtons buttons) {
+// Handle buttons on Boolean field
+static bool booleanFieldHandleButtons(FormField* field, PDButtons buttons) {
     // Pressing A will flip value
      if ((buttons & kButtonA) == kButtonA) {
         FormBooleanField* booleanField = (FormBooleanField*)field->details;
@@ -387,8 +404,38 @@ static bool booleanFieldHandleKeyPress(FormField* field, PDButtons buttons) {
      return true;
 }
 
-// Handle keypress on Button field
-static bool buttonFieldHandleKeyPress(FormField* field, PDButtons buttons) {
+// Determine if any of the currently held down buttons should trigger a repeat
+static PDButtons formGetRepeatedButtons(Form* form, PDButtons currentButtons) {
+    // Only directional buttons can be repeated
+    currentButtons &= (kButtonUp | kButtonRight | kButtonDown | kButtonLeft);
+    PDButtons repeatButtons = 0;
+
+    // If currently pressed buttons are different than the last ones, reset the counter
+    if (form->btnRepeat.buttons != currentButtons) {
+        formResetRepeat(form);
+    }
+
+    form->btnRepeat.buttons = currentButtons;
+
+    if (currentButtons > 0) {
+        form->btnRepeat.frames++;
+
+        if (!form->btnRepeat.isCharged && form->btnRepeat.frames == BUTTON_CHARGE_DELAY) {
+            form->btnRepeat.isCharged = true;
+            form->btnRepeat.frames = 0;
+        } else if (form->btnRepeat.isCharged && form->btnRepeat.frames == BUTTON_REPEAT_DELAY) {
+            repeatButtons = currentButtons;
+
+            form->btnRepeat.frames = 0;
+        }
+    }
+
+    return repeatButtons;
+}
+
+
+// Handle buttons on Button field
+static bool buttonFieldHandleButtons(FormField* field, PDButtons buttons) {
     // If A gets pressed, execute handler function
     if ((buttons & kButtonA) == kButtonA) {
         ((FormButtonField*)field->details)->handler(((FormButtonField*)field->details)->data);
@@ -399,22 +446,25 @@ static bool buttonFieldHandleKeyPress(FormField* field, PDButtons buttons) {
     return true;
 }
 
-// Handle key presses on a field
-static bool fieldHandleKeyPress(FormField* field, PDButtons buttons) {
+// Handle button presses on a field
+static bool formHandleButtons(Form* form, PDButtons pressed, PDButtons current) {
     bool bubble = true;
+    FormField* field = form->focusedFieldItem->field;
+
+    PDButtons buttons = pressed | formGetRepeatedButtons(form, current);
 
     switch (field->type) {
         case kSeed:
-            bubble = seedFieldHandleKeyPress(field, buttons);
+            bubble = seedFieldHandleButtons(field, buttons);
             break;
         case kNumerical:
-            bubble = numericalFieldHandleKeyPress(field, buttons);
+            bubble = numericalFieldHandleButtons(field, buttons);
             break;
         case kBoolean:
-            bubble = booleanFieldHandleKeyPress(field, buttons);
+            bubble = booleanFieldHandleButtons(field, buttons);
             break;
         case kButton:
-            bubble = buttonFieldHandleKeyPress(field, buttons);
+            bubble = buttonFieldHandleButtons(field, buttons);
             break;
     }
 
@@ -462,19 +512,21 @@ static void focusNextField(Form* form) {
 
 // Update/draw a form. Should be called every frame
 void formUpdate(Form *form) {
+    PDButtons current;
     PDButtons pressed;
-    SYS->getButtonState(NULL, &pressed, NULL);
 
-    // The current focused field is allowed to process all key presses
-    // It tells us when we can do other things with key presses, such as move focus
-    bool allowKeyPresses = false;
+    SYS->getButtonState(&current, &pressed, NULL);
+
+    // The current focused field is allowed to process all button presses
+    // It tells us when we can do other things with button presses, such as move focus
+    bool allowButtonPresses = false;
 
     // Send button presses to the focused field
     if (form->focusedFieldItem != NULL) {
-        allowKeyPresses = fieldHandleKeyPress(form->focusedFieldItem->field, pressed);
+        allowButtonPresses = formHandleButtons(form, pressed, current);
     }
 
-    if (allowKeyPresses) {
+    if (allowButtonPresses) {
         // Progress to next field if down or right is pressed
         if ((pressed & (kButtonDown | kButtonRight)) > 0) {
             focusNextField(form);
