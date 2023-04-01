@@ -4,7 +4,6 @@
 #include "text.h"
 
 #define FORM_SEED_CHARACTER_NUM_OPTIONS 16
-//#define FORM_FONT_SIZE 14
 
 static char SEED_CHARACTERS[FORM_SEED_CHARACTER_NUM_OPTIONS] = {
     '0',
@@ -25,78 +24,149 @@ static char SEED_CHARACTERS[FORM_SEED_CHARACTER_NUM_OPTIONS] = {
     'F'
 };
 
-/*
- * Initializers
-*/
+typedef struct FormSeedField {
+    char* value;
+    // Indicates that the field is active and the current value is able to be edited
+    bool isEditing;
+    // Points to which index of the seed value is currently being edited
+    int focusedIndex;
+} FormSeedField;
 
-static FormField* initField(FormFieldType type, int x, int y, int width, int height, const char* label, int labelFontSize, int valueFontSize, void* details) {
+typedef struct FormNumericalField {
+    int* value;
+    int minValue;
+    int maxValue;
+    // Indicates that the field is active and the current value is able to be edited
+    bool isEditing;
+} FormNumericalField;
+
+typedef struct FormBooleanField {
+    bool* value;
+} FormBooleanField;
+
+typedef struct FormButtonField {
+    const char* value;
+    void* data; // Allow for additional data to be attached to the button
+    FormButtonFieldHandler handler;
+} FormButtonField;
+
+// Create a new form
+Form* formCreate() {
+    Form* form = SYS->realloc(NULL, sizeof(Form));
+    form->fieldListHead = NULL;
+    form->fieldListTail = NULL;
+    form->focusFrameCount = 0;
+    form->focusFlipFlop = false;
+
+    return form;
+}
+
+// Add a field to a form
+void formAddField(Form* form, FormField* field) {
+    FormFieldListItem* listItem = SYS->realloc(NULL, sizeof(FormFieldListItem));
+    listItem->field = field;
+    listItem->next = NULL;
+
+    // Is first item?
+    if (form->fieldListHead == NULL) {
+        form->fieldListHead = listItem;
+        form->fieldListTail = listItem;
+
+        // Make the first item the focused item
+        form->focusedFieldItem = listItem;
+    } else {
+        // Add as tail
+        FormFieldListItem* previousTail = form->fieldListTail;
+        previousTail->next = listItem;
+        form->fieldListTail = listItem;
+    }
+}
+
+// Find the list item in the field list that contains the given field
+static FormFieldListItem* fieldInList(FormFieldListItem* head, FormField* field) {
+    for (FormFieldListItem* cur = head; cur != NULL; cur = cur->next) {
+        if (cur->field == field) {
+            return cur;
+        }
+    }
+
+    return NULL;
+}
+
+// Change focus to a given field
+void formFocus(Form* form, FormField* field) {
+    FormFieldListItem* listItem = fieldInList(form->fieldListHead, field);
+
+    if (listItem != NULL) {
+        form->focusedFieldItem = listItem;
+    }
+}
+
+// Create field for a form
+static FormField* createField(FormFieldType type, Dimensions dimensions, const char* label, int labelFontSize, int valueFontSize, void* details) {
     FormField* field = SYS->realloc(NULL, sizeof(FormField));
     field->type = type;
-    field->x = x;
-    field->y = y;
-    field->width = width;
-    field->height = height;
+    field->dimensions = dimensions;
     field->label = label;
     field->labelFontSize = labelFontSize;
     field->valueFontSize = valueFontSize;
     field->details = details;
-
-    field->focused = false;
-    field->focusFrameCount = 0;
-    field->focusFlipFlop = false;
-
+    
     return field;
 }
 
-// Initialize a Seed field, used to set a hexadecimal-based seed for the RNG
-FormField* formInitSeedField(int x, int y, int width, int height, const char* label, char* value, int labelFontSize, int valueFontSize) {
-    FormSeedField* field = SYS->realloc(NULL, sizeof(FormSeedField));
-    field->value = value;
-    field->editing = false;
-    field->editingIndex = 0;
-
-    return initField(kSeed, x, y, width, height, label, labelFontSize, valueFontSize, (void*)field);
+// Destroy and deallocate a form
+static void destroyField(FormField* field) {
+    // Dealloc field details
+    SYS->realloc(field->details, 0);
+    SYS->realloc(field, 0);
 }
 
-// Initialize a Numerical field, used to increment/decrement a number
-FormField* formInitNumericalField(int x, int y, int width, int height, const char* label, int* value, int minValue, int maxValue, int labelFontSize, int valueFontSize) {
+// Create a Seed field, used to set a hexadecimal-based seed for the RNG
+FormField* formCreateSeedField(Dimensions dimensions, const char* label, char* value, int labelFontSize, int valueFontSize) {
+    FormSeedField* seedField = SYS->realloc(NULL, sizeof(FormSeedField));
+    seedField->value = value;
+    seedField->isEditing = false;
+    seedField->focusedIndex = 0;
+
+    return createField(kSeed, dimensions, label, labelFontSize, valueFontSize, (void*)seedField);
+}
+
+// Create a Numerical field, used to increment/decrement a number
+FormField* formCreateNumericalField(Dimensions dimensions, const char* label, int* value, int minValue, int maxValue, int labelFontSize, int valueFontSize) {
     FormNumericalField* field = SYS->realloc(NULL, sizeof(FormNumericalField));
     field->value = value;
     field->minValue = minValue;
     field->maxValue = maxValue;
-    field->editing = false;
+    field->isEditing = false;
 
-    return initField(kNumerical, x, y, width, height, label, labelFontSize, valueFontSize, (void*)field);
+    return createField(kNumerical, dimensions, label, labelFontSize, valueFontSize, (void*)field);
 }
 
-// Initialize a Boolean field, used as a Yes/No field
-FormField* formInitBooleanField(int x, int y, int width, int height, const char* label, bool* value, int labelFontSize, int valueFontSize) {
+// Create a Boolean field, used as a Yes/No field
+FormField* formCreateBooleanField(Dimensions dimensions, const char* label, bool* value, int labelFontSize, int valueFontSize) {
     FormBooleanField* field = SYS->realloc(NULL, sizeof(FormBooleanField));
     field->value = value;
 
-    return initField(kBoolean, x, y, width, height, label, labelFontSize, valueFontSize, (void*)field);
+    return createField(kBoolean, dimensions, label, labelFontSize, valueFontSize, (void*)field);
 }
 
-// Initialize a Button field, which will call the handler function when pressed
-FormField* formInitButtonField(int x, int y, int width, int height, const char* value, int labelFontSize, int valueFontSize, void* data, FormButtonFieldHandler handler) {
+// Create a Button field, which will call the handler function when pressed
+FormField* formCreateButtonField(Dimensions dimensions, const char* value, int labelFontSize, int valueFontSize, void* data, FormButtonFieldHandler handler) {
     FormButtonField* field = SYS->realloc(NULL, sizeof(FormButtonField));
     field->value = value;
     field->data = data;
     field->handler = handler;
 
-    return initField(kButton, x, y, width, height, NULL, labelFontSize, valueFontSize, (void*)field);
+    return createField(kButton, dimensions, NULL, labelFontSize, valueFontSize, (void*)field);
 }
 
-/*
- * Drawing methods
-*/
-
 // Draw seed field contents
-static bool seedFieldDraw(int x, int y, int width, int height, int fontSize, FormSeedField* field) {
+static void seedFieldDraw(int x, int y, int width, int height, int fontSize, FormSeedField* field) {
     textDrawCentered(field->value, x, y, width, height, fontSize, kColorBlack);
 
     // If editing, draw a line under the character being edited
-    if (field->editing) {
+    if (field->isEditing) {
         // First find where the entire text block's top Y and left X start
         int tWidth = textWidth(field->value, FORM_SEED_FIELD_LENGTH, fontSize);
         int tHeight = textHeight(fontSize);
@@ -114,8 +184,8 @@ static bool seedFieldDraw(int x, int y, int width, int height, int fontSize, For
 
         // Copy characters into substring
         int i = 0;
-        if (field->editingIndex > 0) {
-            for (i = 0; i < field->editingIndex; i++) {
+        if (field->focusedIndex > 0) {
+            for (i = 0; i < field->focusedIndex; i++) {
                 previousStr[i] = field->value[i];
             }
         }
@@ -127,18 +197,16 @@ static bool seedFieldDraw(int x, int y, int width, int height, int fontSize, For
         int precedingWidth = textWidth(previousStr, strlen(previousStr), fontSize);
 
         // We'll also need to get the length of just the character being editing so we know how long the line should be
-        int characterWidth = textWidth(&field->value[field->editingIndex], 1, fontSize);
+        int characterWidth = textWidth(&field->value[field->focusedIndex], 1, fontSize);
 
         int lineX = leftX + precedingWidth;
 
         GFX->drawLine(lineX, lineY, lineX + characterWidth, lineY, 2, kColorBlack);
     }
-
-    return true;
 }
 
 // Draw Numerical field contents
-static bool numericalFieldDraw(int x, int y, int width, int height, int fontSize, FormNumericalField* field) {
+static void numericalFieldDraw(int x, int y, int width, int height, int fontSize, FormNumericalField* field) {
     // Format current number value as a string
     char *str;
 
@@ -147,7 +215,7 @@ static bool numericalFieldDraw(int x, int y, int width, int height, int fontSize
     textDrawCentered(str, x, y, width, height, fontSize, kColorBlack);
 
     // Draw underline under value if editing
-    if (field->editing) {
+    if (field->isEditing) {
         int tWidth = textWidth(str, strlen(str), fontSize);
         int tHeight = textHeight(fontSize);
 
@@ -156,56 +224,101 @@ static bool numericalFieldDraw(int x, int y, int width, int height, int fontSize
 
         GFX->drawLine(leftX, topY + tHeight + 2, leftX + tWidth, topY + tHeight + 2, 2, kColorBlack);
     }
-
-    return true;
 }
 
 // Draw boolean field contents
-static bool booleanFieldDraw(int x, int y, int width, int height, int fontSize, FormBooleanField* field) {
+static void booleanFieldDraw(int x, int y, int width, int height, int fontSize, FormBooleanField* field) {
     textDrawCentered(*field->value ? "On" : "Off", x, y, width, height, fontSize, kColorBlack);
-
-    return true;
 }
 
 // Draw button field contents
-static bool buttonFieldDraw(int x, int y, int width, int height, int fontSize, FormButtonField* field) {
+static void buttonFieldDraw(int x, int y, int width, int height, int fontSize, FormButtonField* field) {
     textDrawCentered(field->value, x, y, width, height, fontSize, kColorBlack);
-
-    return true;
 }
 
-/*
- * Event methods
-*/
+// Draw a form field
+static void formDrawField(FormField* field, bool isHighlighted) {
+    Dimensions* dim = &field->dimensions;
+
+    GFX->fillRect(dim->x, dim->y, dim->width, dim->height, kColorWhite);
+    GFX->drawRect(dim->x + 1, dim->y + 1, dim->width - 2, dim->height - 2, kColorBlack);
+
+    // Draws thick border to denote focus
+    GFX->drawRect(dim->x + 2, dim->y + 2, dim->width - 4, dim->height - 4, isHighlighted ? kColorBlack : kColorWhite);
+    GFX->drawRect(dim->x + 3, dim->y + 3, dim->width - 6, dim->height - 6, isHighlighted ? kColorBlack : kColorWhite);
+
+    // Draw the label above it if specified
+    if (field->label != NULL) {
+        int labelHeight = textHeight(field->labelFontSize);
+        textDraw(field->label, dim->x + 3, dim->y - labelHeight - 1, field->labelFontSize, kColorWhite);
+    }
+
+    // Draw field contents
+    switch (field->type) {
+        case kSeed:
+            seedFieldDraw(dim->x, dim->y, dim->width, dim->height, field->valueFontSize, (FormSeedField*)field->details);
+            break;
+        case kNumerical:
+            numericalFieldDraw(dim->x, dim->y, dim->width, dim->height, field->valueFontSize, (FormNumericalField*)field->details);
+            break;
+        case kBoolean:
+            booleanFieldDraw(dim->x, dim->y, dim->width, dim->height, field->valueFontSize, (FormBooleanField*)field->details);
+            break;
+        case kButton:
+            buttonFieldDraw(dim->x, dim->y, dim->width, dim->height, field->valueFontSize, (FormButtonField*)field->details);
+            break;
+    }
+}
+
+// Draw all fields on a form
+static void formDrawAllFields(Form *form) {
+    if (form->fieldListHead != NULL) {
+        for (FormFieldListItem* item = form->fieldListHead; item != NULL; item = item->next) {
+            // Switch highlight every 15 frames when focused
+            bool isHighlighted = false;
+
+            if (form->focusedFieldItem == item) {
+                if (form->focusFrameCount++ == 15) {
+                    form->focusFrameCount = 0;
+                    form->focusFlipFlop = !form->focusFlipFlop;
+                }
+
+                isHighlighted = !form->focusFlipFlop;
+            }
+
+            formDrawField(item->field, isHighlighted);
+        }
+    }
+}
 
 // Handle keypress on Seed field
-static bool seedFieldKeyPress(FormField* field, PDButtons buttons) {
+static bool seedFieldHandleKeyPress(FormField* field, PDButtons buttons) {
     FormSeedField* seedField = (FormSeedField*)field->details;
 
     // Pressing A will toggle editing mode
     if ((buttons & kButtonA) == kButtonA) {
-        seedField->editing = !seedField->editing;
+        seedField->isEditing = !seedField->isEditing;
 
         // Reset edit index
-        seedField->editingIndex = 0;
+        seedField->focusedIndex = 0;
 
         // Always suppress button presses for parent when switching editing modes
         return false;
     }
 
-    if (seedField->editing) {
+    if (seedField->isEditing) {
         // Adjust which character is being editing using left and right buttons
         if ((buttons & kButtonRight) == kButtonRight) {
-            if (++seedField->editingIndex >= FORM_SEED_FIELD_LENGTH) {
-                seedField->editingIndex = FORM_SEED_FIELD_LENGTH - 1;
+            if (++seedField->focusedIndex >= FORM_SEED_FIELD_LENGTH) {
+                seedField->focusedIndex = FORM_SEED_FIELD_LENGTH - 1;
             }
         } else if ((buttons & kButtonLeft) == kButtonLeft) {
-            if (--seedField->editingIndex < 0) {
-                seedField->editingIndex = 0;
+            if (--seedField->focusedIndex < 0) {
+                seedField->focusedIndex = 0;
             }
         // Adjust character above caret when up or down is pressed
         } else if ((buttons & (kButtonUp | kButtonDown)) > 0) {
-            char cur = seedField->value[seedField->editingIndex];
+            char cur = seedField->value[seedField->focusedIndex];
 
             // Find current character in option index
             int idx = 0;
@@ -227,7 +340,7 @@ static bool seedFieldKeyPress(FormField* field, PDButtons buttons) {
             }
 
             // Replace character in string
-            seedField->value[seedField->editingIndex] = SEED_CHARACTERS[idx];
+            seedField->value[seedField->focusedIndex] = SEED_CHARACTERS[idx];
         }
         
         return false;
@@ -237,32 +350,32 @@ static bool seedFieldKeyPress(FormField* field, PDButtons buttons) {
 }
 
 // Handle keypress on Numerical field
-static bool numericalFieldKeyPress(FormField* field, PDButtons buttons) {
+static bool numericalFieldHandleKeyPress(FormField* field, PDButtons buttons) {
     FormNumericalField* numericalField = (FormNumericalField*)field->details;
 
     // Pressing A will toggle editing mode
     if ((buttons & kButtonA) == kButtonA) {
-        numericalField->editing = !numericalField->editing;
+        numericalField->isEditing = !numericalField->isEditing;
 
         return false;
     // Increment value when Up is pressed and in editing mode
-    } else if (numericalField->editing && ((buttons & kButtonUp) == kButtonUp)) {
+    } else if (numericalField->isEditing && ((buttons & kButtonUp) == kButtonUp)) {
         if (++*numericalField->value > numericalField->maxValue) {
             *numericalField->value = numericalField->minValue;
         }
     // Decrement value when Down is pressed and in editing mode
-    } else if (numericalField->editing && ((buttons & kButtonDown) == kButtonDown)) {
+    } else if (numericalField->isEditing && ((buttons & kButtonDown) == kButtonDown)) {
         if (--*numericalField->value < numericalField->minValue) {
             *numericalField->value = numericalField->maxValue;
         }
     }
 
     // Don't allow parent to handle key presses if in editing mode
-    return !numericalField->editing;
+    return !numericalField->isEditing;
 }
 
 // Handle keypress on Boolean field
-static bool booleanFieldKeyPress(FormField* field, PDButtons buttons) {
+static bool booleanFieldHandleKeyPress(FormField* field, PDButtons buttons) {
     // Pressing A will flip value
      if ((buttons & kButtonA) == kButtonA) {
         FormBooleanField* booleanField = (FormBooleanField*)field->details;
@@ -275,10 +388,10 @@ static bool booleanFieldKeyPress(FormField* field, PDButtons buttons) {
 }
 
 // Handle keypress on Button field
-static bool buttonFieldKeyPress(FormField* field, PDButtons buttons) {
+static bool buttonFieldHandleKeyPress(FormField* field, PDButtons buttons) {
     // If A gets pressed, execute handler function
     if ((buttons & kButtonA) == kButtonA) {
-        ((FormButtonField*)field->details)->handler(field);
+        ((FormButtonField*)field->details)->handler(((FormButtonField*)field->details)->data);
 
         return false;
     }
@@ -286,88 +399,109 @@ static bool buttonFieldKeyPress(FormField* field, PDButtons buttons) {
     return true;
 }
 
-// Called on a field when a user focuses it 
-void formFocusField(FormField* field) {
-    field->focused = true;
-}
-
-// Called on a field when a user changes focus away from it
-void formBlurField(FormField* field) {
-    field->focused = false;
-}
-
-// Send current keypresses to field
-// Returns whether or not the keypresses should bubble up and be processed
-bool formHandleButtons(FormField* field, PDButtons buttons) {
-    bool ret = true;
+// Handle key presses on a field
+static bool fieldHandleKeyPress(FormField* field, PDButtons buttons) {
+    bool bubble = true;
 
     switch (field->type) {
         case kSeed:
-            ret = seedFieldKeyPress(field, buttons);
+            bubble = seedFieldHandleKeyPress(field, buttons);
             break;
         case kNumerical:
-            ret = numericalFieldKeyPress(field, buttons);
+            bubble = numericalFieldHandleKeyPress(field, buttons);
             break;
         case kBoolean:
-            ret = booleanFieldKeyPress(field, buttons);
+            bubble = booleanFieldHandleKeyPress(field, buttons);
             break;
         case kButton:
-            ret = buttonFieldKeyPress(field, buttons);
+            bubble = buttonFieldHandleKeyPress(field, buttons);
             break;
     }
 
-    return ret;
+    return bubble;
 }
 
-// Draw the given field, called on every frame
-bool formDrawField(FormField* field) {
-    if (field->frameCount++ == FPS) {
-        field->frameCount = 0;
-    }
+// Blurs the currently focused field and focuses the previous one in the list
+static void focusPreviousField(Form* form) {
+    if (form->focusedFieldItem != NULL) {
+        FormFieldListItem* toFocus = form->fieldListHead;
 
-    bool highlight = false;
-
-    // Switch highlight every 15 frames when focused
-    if (field->focused) {
-        if (field->focusFrameCount++ == 15) {
-            field->focusFrameCount = 0;
-            field->focusFlipFlop = !field->focusFlipFlop;
+        for (FormFieldListItem* current = form->fieldListHead; current != NULL; current = current->next) {
+            if (current->next == form->focusedFieldItem) {
+                toFocus = current;
+                break;
+            }
         }
 
-        highlight = !field->focusFlipFlop;
-    } else {
-        field->focusFrameCount = 0;
-        field->focusFlipFlop = false;
+        form->focusedFieldItem = toFocus;
+
+        // Reset highlight counter
+        form->focusFlipFlop = false;
+        form->focusFrameCount = 0;
+    }
+}
+
+// Blurs the currently focused field and focuses the next one in the list
+static void focusNextField(Form* form) {
+    if (form->focusedFieldItem != NULL) {
+        FormFieldListItem* toFocus = form->focusedFieldItem;
+
+        if (form->focusedFieldItem->next != NULL) {
+            toFocus = form->focusedFieldItem->next;
+        } else {
+            toFocus = form->fieldListTail;
+        }
+
+        form->focusedFieldItem = toFocus;
+
+        // Reset highlight counter
+        form->focusFlipFlop = false;
+        form->focusFrameCount = 0;
+    }
+}
+
+// Update/draw a form. Should be called every frame
+void formUpdate(Form *form) {
+    PDButtons pressed;
+    SYS->getButtonState(NULL, &pressed, NULL);
+
+    // The current focused field is allowed to process all key presses
+    // It tells us when we can do other things with key presses, such as move focus
+    bool allowKeyPresses = false;
+
+    // Send button presses to the focused field
+    if (form->focusedFieldItem != NULL) {
+        allowKeyPresses = fieldHandleKeyPress(form->focusedFieldItem->field, pressed);
     }
 
-    GFX->fillRect(field->x, field->y, field->width, field->height, kColorWhite);
-    GFX->drawRect(field->x + 1, field->y + 1, field->width - 2, field->height - 2, kColorBlack);
-
-    // Draws thick border to denote focus
-    GFX->drawRect(field->x + 2, field->y + 2, field->width - 4, field->height - 4, highlight ? kColorBlack : kColorWhite);
-    GFX->drawRect(field->x + 3, field->y + 3, field->width - 6, field->height - 6, highlight ? kColorBlack : kColorWhite);
-
-    // Draw the label above it if specified
-    if (field->label != NULL) {
-        int labelHeight = textHeight(field->labelFontSize);
-        textDraw(field->label, field->x + 3, field->y - labelHeight - 1, field->labelFontSize, kColorWhite);
+    if (allowKeyPresses) {
+        // Progress to next field if down or right is pressed
+        if ((pressed & (kButtonDown | kButtonRight)) > 0) {
+            focusNextField(form);
+        // Progress to previous field if up or left is pressed
+        } else if ((pressed & (kButtonUp | kButtonLeft)) > 0) {
+            focusPreviousField(form);
+        }
     }
 
-    // Draw field contents
-    switch (field->type) {
-        case kSeed:
-            seedFieldDraw(field->x, field->y, field->width, field->height, field->valueFontSize, (FormSeedField*)field->details);
-            break;
-        case kNumerical:
-            numericalFieldDraw(field->x, field->y, field->width, field->height, field->valueFontSize, (FormNumericalField*)field->details);
-            break;
-        case kBoolean:
-            booleanFieldDraw(field->x, field->y, field->width, field->height, field->valueFontSize, (FormBooleanField*)field->details);
-            break;
-        case kButton:
-            buttonFieldDraw(field->x, field->y, field->width, field->height, field->valueFontSize, (FormButtonField*)field->details);
-            break;
+    formDrawAllFields(form);
+}
+
+// Destroy and deallocate a form
+void formDestroy(Form* form) {
+    // Dealloc all fields
+    if (form->fieldListHead != NULL) {
+        FormFieldListItem* next = form->fieldListHead;
+
+        while (next != NULL) {
+            FormFieldListItem* tmp = next;
+            next = tmp->next;
+            destroyField(tmp->field);
+
+            SYS->realloc(tmp, 0);
+        }
     }
 
-    return true;
+    // Dealloc the form itself
+    SYS->realloc(form, 0);
 }

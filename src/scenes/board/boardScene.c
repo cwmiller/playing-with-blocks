@@ -162,12 +162,8 @@ typedef struct SceneState {
     // Tracks which rows were completed during LineClear state
     CompletedRows roundCompletedRows;
 
-    // Game over buttons
-    FormField* replayButton;
-    FormField* newGameButton;
-    FormField* focusedField;
-
-
+    // Form that is displayed on game over screen
+    Form* gameOverForm;
 } SceneState;
 
 // How many frames per row a piece drops from gravity
@@ -634,6 +630,8 @@ static bool updateSceneTopOut(SceneState* state) {
     return screenUpdated;
 }
 
+// Called on frame update in the "GameOver" state
+// Blacks out the playarea and displays buttons to try again or start new game
 static bool updateSceneGameOver(SceneState* state) {
     float endPct = (float)state->statusFrames / (float)(LCD_ROWS / 10);
 
@@ -644,28 +642,6 @@ static bool updateSceneGameOver(SceneState* state) {
 
         state->statusFrames++;
     } else {
-        PDButtons buttons;
-        SYS->getButtonState(NULL, &buttons, NULL);
-
-        // Send button presses to fields first
-        if (formHandleButtons(state->focusedField, buttons)) {
-            // Form is allowing us to handle buttons
-            // Any press of a direction key changes focus
-            if ((buttons & (kButtonUp | kButtonRight | kButtonDown | kButtonLeft)) > 0) {
-                if (state->focusedField == state->replayButton) {
-                    formBlurField(state->replayButton);
-                    formFocusField(state->newGameButton);
-
-                    state->focusedField = state->newGameButton;
-                } else {
-                    formBlurField(state->newGameButton);
-                    formFocusField(state->replayButton);
-
-                    state->focusedField = state->replayButton;
-                }
-            }
-        }
-
         int gameOverX = MATRIX_GRID_LEFT_X(0);
         int gameOverY = NEXT_BOX_Y + NEXT_BOX_HEIGHT;
         int gameOverWidth = MATRIX_GRID_CELL_SIZE * 10;
@@ -684,8 +660,7 @@ static bool updateSceneGameOver(SceneState* state) {
         textDraw("Game", txtX, txtY, GAMEOVER_FONT_SIZE, kColorWhite);
         textDraw("Over", txtX + GaTxtWidth, txtY + txtHeight, GAMEOVER_FONT_SIZE, kColorWhite);
 
-        formDrawField(state->replayButton);
-        formDrawField(state->newGameButton);
+        formUpdate(state->gameOverForm);
     }
 
     return true;
@@ -758,9 +733,8 @@ static int dasRepeatCheck(DasState* state) {
 static void destroyScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
 
-    // Dispose of form fields
-    SYS->realloc(state->replayButton, 0);
-    SYS->realloc(state->newGameButton, 0);
+    // Dispose of form
+    formDestroy(state->gameOverForm);
 
     // Dispose of scene
     SYS->realloc(scene->data, 0);
@@ -769,16 +743,15 @@ static void destroyScene(Scene* scene) {
 
 // Handle Replay button
 // Starts a game with the same settings (incl. seed) as the previous game
-static void replayHandler(FormField* field) {
-    FormButtonField* buttonField = (FormButtonField*)field->details;
-    SceneState* state = (SceneState*)buttonField->data;
+static void replayHandler(void* data) {
+    SceneState* state = (SceneState*)data;
 
     gameChangeScene(boardSceneCreate(state->seed, state->initialDifficulty, state->music, state->sounds));
 }
 
 // Handle New Game button
 // Goes back to Options screen to start a new game
-static void newGameHandler(FormField* field) {
+static void newGameHandler(void* data) {
     gameChangeScene(optionsSceneCreate());
 }
 
@@ -810,12 +783,14 @@ Scene* boardSceneCreate(unsigned int seed, int initialDifficulty, bool music, bo
     state->softDropStartingRow = 0;
     state->hardDropInitiated = false;
     state->hardDropStartingRow = 0;
-    state->replayButton = formInitButtonField(BUTTON_X, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "Replay", 12, 12, state, replayHandler);
-    state->newGameButton = formInitButtonField(BUTTON_X, BUTTON_Y + BUTTON_HEIGHT + 12, BUTTON_WIDTH, BUTTON_HEIGHT, "New Game", 12, 12, state, newGameHandler);
-    state->focusedField = state->replayButton;
 
-    state->replayButton->focused = true;
-
+    // Create replay/new game forms
+    Form* form = formCreate();
+    state->gameOverForm = form;
+    
+    formAddField(form, formCreateButtonField((Dimensions){ .x = BUTTON_X, .y = BUTTON_Y, .width = BUTTON_WIDTH, .height = BUTTON_HEIGHT }, "Replay", 12, 12, state, replayHandler));
+    formAddField(form, formCreateButtonField((Dimensions){ .x = BUTTON_X, .y = BUTTON_Y + BUTTON_HEIGHT + 12, .width = BUTTON_WIDTH, .height = BUTTON_HEIGHT }, "New Game", 12, 12, state, newGameHandler));
+    
     matrixClear(state->matrix);
 
     scene->name = "Board";

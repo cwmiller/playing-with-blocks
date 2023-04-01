@@ -13,89 +13,67 @@ typedef enum FormFieldType {
     kButton
 } FormFieldType;
 
-typedef struct FormField {
-    FormFieldType type;
-    const char* label;
+typedef struct Dimensions {
     int x;
     int y;
     int width;
     int height;
+} Dimensions;
+
+typedef struct FormField {
+    FormFieldType type;
+    Dimensions dimensions;
+
+    const char* label;
 
     int labelFontSize;
     int valueFontSize;
 
+    // Holds data specific to the field type
     void* details;
-    int frameCount;
-
-    // Used to track focus state and frames for animation
-    bool focused;
-    int focusFrameCount;
-    bool focusFlipFlop;
 } FormField;
 
-typedef struct FormSeedField {
-    char* value;
-    // Indicates that the field is active and the current value is able to be edited
-    bool editing;
-    // Points to which index of the seed value is currently being edited
-    int editingIndex;
-} FormSeedField;
+typedef struct FormFieldListItem {
+    FormField* field;
+    struct FormFieldListItem* next;
+} FormFieldListItem;
 
-typedef struct FormNumericalField {
-    int* value;
-    int minValue;
-    int maxValue;
-    // Indicates that the field is active and the current value is able to be edited
-    bool editing;
-} FormNumericalField;
+typedef struct Form {
+    FormFieldListItem* fieldListHead;
+    FormFieldListItem* fieldListTail;
+    FormFieldListItem* focusedFieldItem;
 
-typedef struct FormBooleanField {
-    bool* value;
-} FormBooleanField;
+    int focusFrameCount;
+    bool focusFlipFlop;
+} Form;
 
-typedef void (*FormButtonFieldHandler)(FormField* field);
+// Create a new form
+Form* formCreate();
 
-typedef struct FormButtonField {
-    const char* value;
-    void* data; // Allow for additional data to be attached to the button
-    FormButtonFieldHandler handler;
-} FormButtonField;
+// Create a Seed field, used to set a hexadecimal-based seed for the RNG
+FormField* formCreateSeedField(Dimensions dimensions, const char* label, char* value, int labelFontSize, int valueFontSize);
 
-/*
- * Initializers
- */
+// Create a Numerical field, used to increment/decrement a number
+FormField* formCreateNumericalField(Dimensions dimensions, const char* label, int* value, int minValue, int maxValue, int labelFontSize, int valueFontSize);
 
-// Initialize a Seed field, used to set a hexadecimal-based seed for the RNG
-FormField* formInitSeedField(int x, int y, int width, int height, const char* label, char* value, int labelFontSize, int valueFontSize);
+// Create a Boolean field, used as a Yes/No field
+FormField* formCreateBooleanField(Dimensions dimensions, const char* label, bool* value, int labelFontSize, int valueFontSize);
 
-// Initialize a Numerical field, used to increment/decrement a number
-FormField* formInitNumericalField(int x, int y, int width, int height, const char* label, int* value, int minValue, int maxValue, int labelFontSize, int valueFontSize);
+typedef void (*FormButtonFieldHandler)(void* data);
 
-// Initialize a Boolean field, used as a Yes/No field
-FormField* formInitBooleanField(int x, int y, int width, int height, const char* label, bool* value, int labelFontSize, int valueFontSize);
+// Create a Button field, which will call the handler function when pressed
+FormField* formCreateButtonField(Dimensions dimensions, const char* value, int labelFontSize, int valueFontSize, void* data, FormButtonFieldHandler handler);
 
-// Initialize a Button field, which will call the handler function when pressed
-FormField* formInitButtonField(int x, int y, int width, int height, const char* value, int labelFontSize, int valueFontSize, void* data, FormButtonFieldHandler handler);
+// Add a field to a form
+void formAddField(Form* form, FormField* field);
 
-/*
- * Events
- */
+// Change focus to a given field
+void formFocus(Form* form, FormField* field);
 
-// Called on a field when a user focuses it 
-void formFocusField(FormField* field);
+// Update/draw form. Should be called every frame
+void formUpdate(Form* form);
 
-// Called on a field when a user changes focus away from it
-void formBlurField(FormField* field);
-
-// Send current keypresses to field
-// Returns whether or not the keypresses should bubble up and be processed
-bool formHandleButtons(FormField* field, PDButtons buttons);
-
-/*
- * Drawing
- */
-
-// Draw the given field, called on every frame
-bool formDrawField(FormField* field);
+// Destroy and deallocate a form
+void formDestroy(Form* form);
 
 #endif
