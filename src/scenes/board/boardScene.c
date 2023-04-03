@@ -247,9 +247,9 @@ static void playSample(SceneState* state, AudioSample* sample);
 
 static int incrementScore(int current, int add);
 
-static void handleMusicMenu(SceneState* state);
-static void handleSoundMenu(SceneState* state);
-static void handleEndGameMenu(SceneState* state);
+static void handleMusicMenu(void* userdata);
+static void handleSoundMenu(void* userdata);
+static void handleEndGameMenu(void* userdata);
 
 
 // Handle when scene becomes active
@@ -647,7 +647,7 @@ static bool updateSceneTopOut(SceneState* state) {
 // Called on frame update in the "GameOver" state
 // Blacks out the playarea and displays buttons to try again or start new game
 static bool updateSceneGameOver(SceneState* state) {
-    float endPct = (float)state->statusFrames / (float)(LCD_ROWS / 10);
+    double endPct = (float)state->statusFrames / (float)(LCD_ROWS / 10);
 
     if (endPct <= 1) {
         int endY = (int)(sin((endPct * 3.14159) / 2) * LCD_ROWS);
@@ -662,8 +662,6 @@ static bool updateSceneGameOver(SceneState* state) {
         int gameOverHeight = MATRIX_GRID_CELL_SIZE * 3;
 
         int txtHeight = textHeight(GAMEOVER_FONT_SIZE);
-        int gameTxtWidth = textWidth("Game", strlen("Game"), GAMEOVER_FONT_SIZE);
-        int overTxtWidth = textWidth("Over", strlen("Over"), GAMEOVER_FONT_SIZE);
         int GaTxtWidth = textWidth("Ga", strlen("Ga"), GAMEOVER_FONT_SIZE);
 
         int fullLengthWidth = textWidth("Gameer", strlen("Gameer"), GAMEOVER_FONT_SIZE);
@@ -1111,7 +1109,9 @@ static int incrementScore(int current, int add){
 }
 
 // Handle when the Music menu item toggles
-static void handleMusicMenu(SceneState* state) {
+static void handleMusicMenu(void* userdata) {
+    SceneState* state = (SceneState*)userdata;
+
     if (state->musicMenuItem != NULL) {
         state->music = SYS->getMenuItemValue(state->musicMenuItem) == 1;
 
@@ -1124,13 +1124,15 @@ static void handleMusicMenu(SceneState* state) {
 }
 
 // Handle when the Sounds menu item toggles
-static void handleSoundMenu(SceneState* state) {
+static void handleSoundMenu(void* userdata) {
+    SceneState* state = (SceneState*)userdata;
+
     if (state->soundsMenuItem != NULL) {
         state->sounds = SYS->getMenuItemValue(state->soundsMenuItem) == 1;
     }
 }
 
 // Handle when the End Game menu item is activated
-static void handleEndGameMenu(SceneState* state) {
+static void handleEndGameMenu(void* userdata) {
     gameChangeScene(optionsSceneCreate());
 }
