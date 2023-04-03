@@ -279,7 +279,7 @@ static void initScene(Scene* scene) {
     // Add menu items
     SYS->removeAllMenuItems();
     state->musicMenuItem = SYS->addCheckmarkMenuItem("Music", state->music ? 1 : 0, handleMusicMenu, state);
-    state->soundsMenuItem = SYS->addCheckmarkMenuItem("Sound", state->sounds ? 1 : 0, handleSoundMenu, state);
+    state->soundsMenuItem = SYS->addCheckmarkMenuItem("SFX", state->sounds ? 1 : 0, handleSoundMenu, state);
     SYS->addMenuItem("End Game", handleEndGameMenu, state);
 }
 

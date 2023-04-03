@@ -128,7 +128,7 @@ Scene* optionsSceneCreate(void) {
     formAddField(state->form, formCreateNumericalField((Dimensions){ .x = 245, .y = 54, .width = 80, .height = 30 }, "Level", &values->difficulty, 0, 20, 14, 14));
 
     formAddField(state->form, formCreateBooleanField((Dimensions){ .x = 75, .y = 114, .width = 80, .height = 30 }, "Music", &values->music, 14, 14));
-    formAddField(state->form, formCreateBooleanField((Dimensions) { .x = 245, .y = 114, .width = 80, .height = 30 }, "Sound", &values->sounds, 14, 14));
+    formAddField(state->form, formCreateBooleanField((Dimensions) { .x = 245, .y = 114, .width = 80, .height = 30 }, "SFX", &values->sounds, 14, 14));
 
     FormField* submitBtn = formCreateButtonField((Dimensions) { .x = (LCD_COLUMNS - 140) / 2, .y = 174, .width = 140, .height = 30 }, "Play!", 14, 14, state, submitHandler);
 
