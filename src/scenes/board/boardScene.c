@@ -121,6 +121,9 @@ typedef struct SceneState {
     bool music;
     bool sounds;
 
+    PDMenuItem* musicMenuItem;
+    PDMenuItem* soundsMenuItem;
+
     Status status;
 
     // Counts the number of frames for the current status
@@ -244,6 +247,11 @@ static void playSample(SceneState* state, AudioSample* sample);
 
 static int incrementScore(int current, int add);
 
+static void handleMusicMenu(SceneState* state);
+static void handleSoundMenu(SceneState* state);
+static void handleEndGameMenu(SceneState* state);
+
+
 // Handle when scene becomes active
 static void initScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
@@ -267,6 +275,12 @@ static void initScene(Scene* scene) {
 
     // Start playing music and loop forever
     playMusic(state);
+
+    // Add menu items
+    SYS->removeAllMenuItems();
+    state->musicMenuItem = SYS->addCheckmarkMenuItem("Music", state->music ? 1 : 0, handleMusicMenu, state);
+    state->soundsMenuItem = SYS->addCheckmarkMenuItem("Sound", state->sounds ? 1 : 0, handleSoundMenu, state);
+    SYS->addMenuItem("End Game", handleEndGameMenu, state);
 }
 
 // Called on every frame while scene is active
@@ -733,12 +747,20 @@ static int dasRepeatCheck(DasState* state) {
 static void destroyScene(Scene* scene) {
     SceneState* state = (SceneState*)scene->data;
 
+    // Stop music if it's playing
+    if (isMusicPlaying()) {
+        stopMusic();
+    }
+
     // Dispose of form
     formDestroy(state->gameOverForm);
 
     // Dispose of scene
     SYS->realloc(scene->data, 0);
     SYS->realloc(scene, 0);
+
+    // Remove the menu items
+    SYS->removeAllMenuItems();
 }
 
 // Handle Replay button
@@ -765,6 +787,8 @@ Scene* boardSceneCreate(unsigned int seed, int initialDifficulty, bool music, bo
     state->initialDifficulty = initialDifficulty;
     state->music = music;
     state->sounds = sounds;
+    state->musicMenuItem = NULL;
+    state->soundsMenuItem = NULL;
     state->difficulty = initialDifficulty;
     state->completedLines = 0;
     state->score = 0;
@@ -1084,4 +1108,29 @@ static int incrementScore(int current, int add){
     }
 
     return new;
+}
+
+// Handle when the Music menu item toggles
+static void handleMusicMenu(SceneState* state) {
+    if (state->musicMenuItem != NULL) {
+        state->music = SYS->getMenuItemValue(state->musicMenuItem) == 1;
+
+        if (state->music) {
+            playMusic(state);
+        } else {
+            stopMusic();
+        }
+    }
+}
+
+// Handle when the Sounds menu item toggles
+static void handleSoundMenu(SceneState* state) {
+    if (state->soundsMenuItem != NULL) {
+        state->sounds = SYS->getMenuItemValue(state->soundsMenuItem) == 1;
+    }
+}
+
+// Handle when the End Game menu item is activated
+static void handleEndGameMenu(SceneState* state) {
+    gameChangeScene(optionsSceneCreate());
 }
