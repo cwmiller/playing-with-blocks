@@ -227,6 +227,8 @@ static void numericalFieldDraw(int x, int y, int width, int height, int fontSize
     // Format current number value as a string
     char *str;
 
+    // Use PD lib to format value
+    // PD lib won't free this automatically
     SYS->formatString(&str, "%d", *field->value);
 
     textDrawCentered(str, x, y, width, height, fontSize, kColorBlack);
@@ -241,6 +243,8 @@ static void numericalFieldDraw(int x, int y, int width, int height, int fontSize
 
         GFX->drawLine(leftX, topY + tHeight + 2, leftX + tWidth, topY + tHeight + 2, 2, kColorBlack);
     }
+
+    SYS->realloc(str, 0);
 }
 
 // Draw boolean field contents
@@ -271,6 +275,7 @@ static void formDrawField(FormField* field, bool isHighlighted) {
     }
 
     // Draw field contents
+
     switch (field->type) {
         case kSeed:
             seedFieldDraw(dim->x, dim->y, dim->width, dim->height, field->valueFontSize, (FormSeedField*)field->details);

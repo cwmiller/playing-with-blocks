@@ -8,7 +8,7 @@
 #include "text.h"
 
 typedef struct FormValues {
-    char* seed;
+    char seed[FORM_SEED_FIELD_LENGTH + 1];
     int difficulty;
     bool music;
     bool sounds;
@@ -46,6 +46,8 @@ static bool updateScene(Scene* scene) {
 
     // Once Start is pressed, transition to board scene
     if (state->transitionToGame) {
+        state->transitionToGame = false;
+
         // Convert seed hex value to int
         unsigned int seed = (unsigned int)strtoul(state->formValues->seed, NULL, 16);
 
@@ -72,33 +74,34 @@ static void destroyScene(Scene* scene) {
 
     // Free form values
     if (state->formValues != NULL) {
-        if (state->formValues->seed != NULL) {
-            SYS->realloc(state->formValues->seed, 0);
-        }
-
         SYS->realloc(state->formValues, 0);
     }
 
     // Free form
     formDestroy(state->form);
 
-    SYS->realloc(scene->data, 0);
-
     // Dispose of scene
+    SYS->realloc(scene->data, 0);
     SYS->realloc(scene, 0);
 
     GFX->fillRect(0, 0, LCD_COLUMNS, LCD_ROWS, kColorWhite);
 }
 
-void generateSeed(char** ptr) {
+void generateSeed(char* dest) {
     // Generate a random seed.. randomly
     rand_seed(SYS->getSecondsSinceEpoch(NULL));
 
-    SYS->formatString(ptr, "%02X%02X%02X%02X", 
+    char* src;
+
+    SYS->formatString(&src, "%02X%02X%02X%02X", 
         rand_next() % 256,
         rand_next() % 256,
         rand_next() % 256,
         rand_next() % 256);
+
+    strcpy_s(dest, FORM_SEED_FIELD_LENGTH + 1, src);
+
+    SYS->realloc(src, 0);
 }
 
 // Create scene for Options screen
@@ -119,7 +122,8 @@ Scene* optionsSceneCreate(void) {
     values->difficulty = 0;
     values->music = true;
     values->sounds = true;
-    generateSeed(&values->seed);
+
+    generateSeed(values->seed);
 
     state->form = formCreate();
     state->formValues = values;
