@@ -25,7 +25,7 @@ static bool updateScene(Scene* scene) {
 
     // Press A button to start the game
     if ((released & kButtonA) == kButtonA) {
-        gameChangeScene(optionsSceneCreate());
+        gameChangeScene(optionsSceneCreate(true, true));
 
         return true;
     } else {

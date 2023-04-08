@@ -4,6 +4,7 @@
 #include "scene.h"
 
 // Create scene for Options scene
-Scene* optionsSceneCreate();
+// Allow setting defaults for music & sounds
+Scene* optionsSceneCreate(bool music, bool sounds);
 
 #endif

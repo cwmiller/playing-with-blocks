@@ -324,8 +324,6 @@ static bool updateScene(Scene* scene) {
             break;
     }
 
-    //SYS->drawFPS(0, 0);
-
     return screenUpdated;
 }
 
@@ -647,6 +645,12 @@ static bool updateSceneTopOut(SceneState* state) {
 // Called on frame update in the "GameOver" state
 // Blacks out the playarea and displays buttons to try again or start new game
 static bool updateSceneGameOver(SceneState* state) {
+    // Stop music if it's playing
+    if (isMusicPlaying()) {
+        stopMusic();
+    }
+
+
     double endPct = (float)state->statusFrames / (float)(LCD_ROWS / 10);
 
     if (endPct <= 1) {
@@ -656,6 +660,8 @@ static bool updateSceneGameOver(SceneState* state) {
 
         state->statusFrames++;
     } else {
+        GFX->fillRect(MATRIX_GRID_LEFT_X(0) - MATRIX_GRID_CELL_SIZE, 0, MATRIX_GRID_CELL_SIZE * 12, LCD_ROWS, kColorBlack);
+
         int gameOverX = MATRIX_GRID_LEFT_X(0);
         int gameOverY = NEXT_BOX_Y + NEXT_BOX_HEIGHT;
         int gameOverWidth = MATRIX_GRID_CELL_SIZE * 10;
@@ -771,8 +777,11 @@ static void replayHandler(void* data) {
 
 // Handle New Game button
 // Goes back to Options screen to start a new game
+// Gets passed the current scene state
 static void newGameHandler(void* data) {
-    gameChangeScene(optionsSceneCreate());
+    SceneState* state = (SceneState*)data;
+
+    gameChangeScene(optionsSceneCreate(state->music, state->sounds));
 }
 
 // Create scene for Board scene
@@ -1133,6 +1142,9 @@ static void handleSoundMenu(void* userdata) {
 }
 
 // Handle when the End Game menu item is activated
+// Gets passed the current scene state
 static void handleEndGameMenu(void* userdata) {
-    gameChangeScene(optionsSceneCreate());
+    SceneState* state = (SceneState*)userdata;
+
+    changeStatus(state, GameOver);
 }

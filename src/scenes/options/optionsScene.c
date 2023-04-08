@@ -105,7 +105,7 @@ void generateSeed(char* dest) {
 }
 
 // Create scene for Options screen
-Scene* optionsSceneCreate(void) {
+Scene* optionsSceneCreate(bool music, bool sounds) {
     Scene* scene = SYS->realloc(NULL, sizeof(Scene));
 
     scene->name = "Options Screen";
@@ -120,8 +120,8 @@ Scene* optionsSceneCreate(void) {
 
     FormValues *values = SYS->realloc(NULL, sizeof(FormValues));
     values->difficulty = 0;
-    values->music = true;
-    values->sounds = true;
+    values->music = music;
+    values->sounds = sounds;
 
     generateSeed(values->seed);
 
