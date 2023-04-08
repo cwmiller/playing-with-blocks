@@ -6,7 +6,6 @@
 
 typedef enum {
     Running,
-    Paused,
     SceneTransition
 } RunStatus;
 
@@ -48,10 +47,6 @@ static int gameUpdate(void* userdata) {
     switch (gameState->status) {
         case Running:
             gameState->currentScene->update(gameState->currentScene);
-            break;
-
-        case Paused:
-            // TODO
             break;
 
         case SceneTransition:

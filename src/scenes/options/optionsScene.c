@@ -34,8 +34,6 @@ static void submitHandler(void* data) {
 
 // Called on first frame when scene switches
 static void initScene(Scene* scene) {
-    OptionsState* state = (OptionsState*)scene->data;
-
     // Screen uses an black background
     GFX->fillRect(0, 0, LCD_COLUMNS, LCD_ROWS, kColorBlack);
 }
@@ -99,7 +97,9 @@ void generateSeed(char* dest) {
         rand_next() % 256,
         rand_next() % 256);
 
-    strcpy_s(dest, FORM_SEED_FIELD_LENGTH + 1, src);
+    for (int i = 0; i <= FORM_SEED_FIELD_LENGTH; i++) {
+        dest[i] = src[i];
+    }
 
     SYS->realloc(src, 0);
 }

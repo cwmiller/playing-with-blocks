@@ -10,8 +10,6 @@
 static LCDBitmap* titleBitmap = NULL;
 
 static void initScene(Scene* scene) {
-    (void*)scene;
-
     // Load title screen image
     titleBitmap = assetLoadBitmap("images/title.png");
 
@@ -21,8 +19,6 @@ static void initScene(Scene* scene) {
 }
 
 static bool updateScene(Scene* scene) {
-    (void*)scene;
-
     PDButtons released;
 
     SYS->getButtonState(NULL, NULL, &released);
